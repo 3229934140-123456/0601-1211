@@ -4,6 +4,8 @@ import type {
   ResultCenterConfig,
   ResultCenterAction,
   ResultCenterSnapshot,
+  WorkbenchConfig,
+  WorkbenchAction,
   SubmitResult,
   RichResultSummary,
   UserContext,
@@ -14,6 +16,7 @@ export class ResultCenter {
   private config: ResultCenterConfig;
   private snapshots: Map<string, ResultCenterSnapshot> = new Map();
   private currentContext: SubmissionResultContext | null = null;
+  private workbenchConfig: WorkbenchConfig | null = null;
 
   constructor(config?: Partial<ResultCenterConfig>) {
     const defaultBlocks: ResultBlock[] = [
@@ -32,6 +35,39 @@ export class ResultCenter {
       customFields: config?.customFields || {},
       secondaryActions: config?.secondaryActions || [],
     };
+  }
+
+  setWorkbench(config: WorkbenchConfig): void {
+    this.workbenchConfig = config;
+  }
+
+  clearWorkbench(): void {
+    this.workbenchConfig = null;
+  }
+
+  getWorkbenchConfig(): WorkbenchConfig | null {
+    return this.workbenchConfig;
+  }
+
+  getVisibleWorkbenchActions(): WorkbenchAction[] {
+    if (!this.workbenchConfig || !this.currentContext) return [];
+    return this.workbenchConfig.actions.filter(
+      (a) => !a.visible || a.visible(this.currentContext!)
+    );
+  }
+
+  async runWorkbenchAction(actionId: string, options?: Record<string, unknown>): Promise<boolean> {
+    if (!this.workbenchConfig || !this.currentContext) return false;
+    const action = this.workbenchConfig.actions.find((a) => a.id === actionId);
+    if (!action) return false;
+    if (action.visible && !action.visible(this.currentContext)) return false;
+    try {
+      await action.handler(this.currentContext, options);
+      return true;
+    } catch (e) {
+      console.error('[ResultCenter] Workbench action error:', e);
+      return false;
+    }
   }
 
   buildContext(params: {

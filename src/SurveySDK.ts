@@ -34,10 +34,19 @@ import type {
   TrendResult,
   KeywordChangeResult,
   WeeklyReportResult,
+  MonthlyReportResult,
+  VersionComparisonResult,
+  AnalysisFilter,
+  BusinessExportResult,
   SubmissionResultContext,
   ResultBlock,
   ResultCenterConfig,
   ResultCenterAction,
+  WorkbenchConfig,
+  WorkbenchAction,
+  SyncContainerConfig,
+  CrossContainerSyncResult,
+  SyncBroadcastMessage,
 } from './types';
 
 import { EventEmitter } from './core/EventEmitter';
@@ -821,6 +830,82 @@ export class SurveySDK {
 
   verifyResultConsistency(): boolean {
     return this.resultCenter.verifyConsistency();
+  }
+
+  generateMonthlyReport(year?: number, month?: number): MonthlyReportResult {
+    return this.analysisCenter.generateMonthlyReport(year, month);
+  }
+
+  compareVersions(versions?: string[]): VersionComparisonResult {
+    return this.analysisCenter.compareVersions(versions);
+  }
+
+  getFilteredAnalysis(filter: AnalysisFilter) {
+    return this.analysisCenter.getDashboards(filter);
+  }
+
+  applyAnalysisFilter(filter: AnalysisFilter): SubmissionRecord[] {
+    return this.analysisCenter.applyFilter(filter);
+  }
+
+  exportBusinessReport(
+    filter: AnalysisFilter,
+    exportedBy: string = 'SurveySDK'
+  ): BusinessExportResult {
+    return this.analysisCenter.exportBusinessReport(filter, exportedBy);
+  }
+
+  setResultWorkbench(config: WorkbenchConfig): void {
+    this.resultCenter.setWorkbench(config);
+  }
+
+  clearResultWorkbench(): void {
+    this.resultCenter.clearWorkbench();
+  }
+
+  getWorkbenchActions(): WorkbenchAction[] {
+    return this.resultCenter.getVisibleWorkbenchActions();
+  }
+
+  async runWorkbenchAction(actionId: string, options?: Record<string, unknown>): Promise<boolean> {
+    return this.resultCenter.runWorkbenchAction(actionId, options);
+  }
+
+  registerSyncContainer(config: SyncContainerConfig): () => void {
+    return this.toolbarSync.registerContainer(config);
+  }
+
+  unregisterSyncContainer(containerId: string): void {
+    this.toolbarSync.unregisterContainer(containerId);
+  }
+
+  getRegisteredContainers(): string[] {
+    return this.toolbarSync.getRegisteredContainers();
+  }
+
+  broadcastSyncMessage(
+    sourceContainerId: string,
+    event: ToolbarSyncEventType,
+    overrides?: Partial<ToolbarState>
+  ): boolean {
+    const ok = this.toolbarSync.broadcast(sourceContainerId, event, overrides);
+    if (ok && overrides && this.engine) {
+      if (overrides.currentQuestionIndex !== undefined && this.engine.getStatus() !== 'submitted') {
+        this.engine.setCurrentIndex(overrides.currentQuestionIndex);
+      }
+      if (overrides.displayMode !== undefined) {
+        this.setDisplayMode(overrides.displayMode);
+      }
+    }
+    return ok;
+  }
+
+  getSyncBroadcastHistory(limit: number = 20): SyncBroadcastMessage[] {
+    return this.toolbarSync.getBroadcastHistory(limit);
+  }
+
+  getCrossContainerSyncResult(): CrossContainerSyncResult {
+    return this.toolbarSync.getCrossContainerSyncResult();
   }
 
   on<K extends SurveyEventName>(

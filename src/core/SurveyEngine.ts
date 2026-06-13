@@ -75,6 +75,14 @@ export class SurveyEngine {
     return this.currentIndex;
   }
 
+  setCurrentIndex(index: number): void {
+    const safe = Math.max(0, Math.min(index, this.visibleQuestions.length - 1));
+    if (safe !== this.currentIndex) {
+      this.currentIndex = safe;
+      this.notifyUpdate();
+    }
+  }
+
   getTotalQuestions(): number {
     return this.visibleQuestions.length;
   }

@@ -6,9 +6,14 @@ import type {
   TrendPoint,
   KeywordChangeResult,
   WeeklyReportResult,
+  MonthlyReportResult,
+  VersionComparisonResult,
+  AnalysisFilter,
+  BusinessExportResult,
   ComparisonGroup,
   SurveyComparisonResult,
   RichResultSummary,
+  ComparisonMetric,
 } from '../types';
 
 import { StatisticsCalculator } from './StatisticsCalculator';
@@ -285,6 +290,358 @@ export class AnalysisCenter {
       comparison,
       highlights,
     };
+  }
+
+  applyFilter(filter: AnalysisFilter): SubmissionRecord[] {
+    return this.records.filter((r) => {
+      if (filter.startDate) {
+        const s = new Date(filter.startDate).getTime();
+        if (r.submittedAt < s) return false;
+      }
+      if (filter.endDate) {
+        const e = new Date(filter.endDate).getTime() + 86400000 - 1;
+        if (r.submittedAt > e) return false;
+      }
+      if (filter.departments && filter.departments.length > 0) {
+        const d = r.user.department || '未指定部门';
+        if (!filter.departments.includes(d)) return false;
+      }
+      if (filter.versions && filter.versions.length > 0) {
+        const v = r.surveyVersion || 'default';
+        if (!filter.versions.includes(v)) return false;
+      }
+      if (filter.customFilter) {
+        if (!filter.customFilter(r)) return false;
+      }
+      return true;
+    });
+  }
+
+  getDashboards(
+    filter: AnalysisFilter
+  ): {
+    groups: AutoGroupResult[];
+    trends: TrendResult[];
+    keywordChanges: KeywordChangeResult[];
+    comparison: SurveyComparisonResult | null;
+    overallSummary: RichResultSummary | null;
+  } {
+    const saved = this.records;
+    this.records = this.applyFilter(filter);
+
+    try {
+      const deptGroups = this.autoGroup('department');
+      const verGroups = this.autoGroup('version');
+
+      const trends = [
+        ...this.getTrends('completionRate', 'week'),
+        ...this.getTrends('averageScore', 'week'),
+        ...this.getTrends('weightedAverage', 'week'),
+      ];
+
+      const keywordChanges = this.getKeywordChanges('week');
+
+      const compGroups: ComparisonGroup[] = [];
+      for (const g of deptGroups.groups) {
+        if (g.records.length === 0) continue;
+        compGroups.push({
+          id: g.key,
+          label: `${g.label}（${g.records.length}人）`,
+          summary: this.mergeSummaries(g.records),
+        });
+      }
+      for (const g of verGroups.groups) {
+        if (g.records.length === 0) continue;
+        compGroups.push({
+          id: `v_${g.key}`,
+          label: `v${g.key}（${g.records.length}份）`,
+          summary: this.mergeSummaries(g.records),
+        });
+      }
+
+      const comparison = compGroups.length > 1
+        ? StatisticsCalculator.compareSummaries(compGroups)
+        : null;
+
+      const overall = this.records.length > 0 ? this.mergeSummaries(this.records) : null;
+
+      return {
+        groups: [deptGroups, verGroups],
+        trends,
+        keywordChanges,
+        comparison,
+        overallSummary: overall,
+      };
+    } finally {
+      this.records = saved;
+    }
+  }
+
+  generateMonthlyReport(year?: number, month?: number): MonthlyReportResult {
+    const now = new Date();
+    const y = year ?? now.getFullYear();
+    const m = month ?? now.getMonth();
+    const firstDay = new Date(y, m, 1);
+    const lastDay = new Date(y, m + 1, 0);
+    const startStr = firstDay.toISOString().slice(0, 10);
+    const endStr = lastDay.toISOString().slice(0, 10);
+    const monthStr = `${y}-${String(m + 1).padStart(2, '0')}`;
+
+    const saved = this.records;
+    this.records = this.applyFilter({ startDate: startStr, endDate: endStr });
+
+    try {
+      const weekly = this.records.length > 0 ? this.generateWeeklyReport() : null;
+
+      const weeklyBreakdown: WeeklyReportResult[] = [];
+      const totalDays = lastDay.getDate() - firstDay.getDate() + 1;
+      for (let d = 1; d <= totalDays; d += 7) {
+        const wStart = new Date(y, m, d);
+        const wEnd = new Date(y, m, Math.min(d + 6, totalDays));
+        const ws = wStart.toISOString().slice(0, 10);
+        const we = wEnd.toISOString().slice(0, 10);
+        const prev = this.records;
+        this.records = prev.filter((r) => {
+          const ts = r.submittedAt;
+          return ts >= wStart.getTime() && ts <= wEnd.getTime() + 86399000;
+        });
+        if (this.records.length > 0) {
+          const w = this.generateWeeklyReport(ws, we);
+          weeklyBreakdown.push(w);
+        }
+        this.records = prev;
+      }
+
+      const firstMonthStart = new Date(y, m - 1, 1).toISOString().slice(0, 10);
+      const firstMonthEnd = new Date(y, m, 0).toISOString().slice(0, 10);
+      const prevMonthRecords = saved.filter((r) => {
+        const s = new Date(firstMonthStart).getTime();
+        const e = new Date(firstMonthEnd).getTime() + 86399000;
+        return r.submittedAt >= s && r.submittedAt <= e;
+      });
+
+      const currentSummary = this.records.length > 0 ? this.mergeSummaries(this.records) : null;
+      const prevSummary = prevMonthRecords.length > 0 ? this.mergeSummaries(prevMonthRecords) : null;
+
+      const momMetrics = [
+        { metric: 'completionRate', current: currentSummary?.completionRate ?? null, previous: prevSummary?.completionRate ?? null },
+        { metric: 'averageScore', current: currentSummary?.averageScore ?? null, previous: prevSummary?.averageScore ?? null },
+        { metric: 'weightedAverage', current: currentSummary?.ratingOverview.weightedAverage ?? null, previous: prevSummary?.ratingOverview.weightedAverage ?? null },
+        { metric: 'totalSubmissions', current: this.records.length, previous: prevMonthRecords.length },
+      ];
+
+      const monthOverMonth = momMetrics.map((m) => ({
+        metric: m.metric,
+        current: m.current,
+        previous: m.previous,
+        changeRate: (typeof m.current === 'number' && typeof m.previous === 'number' && m.previous !== 0)
+          ? Math.round(((m.current - m.previous) / m.previous) * 1000) / 1000
+          : 0,
+      }));
+
+      const baseHighlights = weekly?.highlights || [];
+      const highlights = [...baseHighlights];
+      for (const mom of monthOverMonth) {
+        if (typeof mom.changeRate === 'number' && Math.abs(mom.changeRate) > 0.05) {
+          const direction = mom.changeRate > 0 ? '↑' : '↓';
+          const labels: Record<string, string> = {
+            completionRate: '完成率', averageScore: '平均分',
+            weightedAverage: '加权平均分', totalSubmissions: '提交数',
+          };
+          highlights.push(`${labels[mom.metric] || mom.metric} 环比 ${direction}${Math.round(Math.abs(mom.changeRate) * 100)}%`);
+        }
+      }
+
+      return {
+        surveyId: this.records.length > 0 ? this.records[0].surveyId : weekly?.surveyId || '',
+        generatedAt: Date.now(),
+        period: { start: startStr, end: endStr },
+        month: monthStr,
+        totalSubmissions: this.records.length,
+        groupSummaries: weekly?.groupSummaries || [],
+        trends: weekly?.trends || [],
+        keywordChanges: weekly?.keywordChanges || [],
+        comparison: weekly?.comparison || null,
+        highlights,
+        weeklyBreakdown,
+        monthOverMonth,
+      };
+    } finally {
+      this.records = saved;
+    }
+  }
+
+  compareVersions(versions?: string[]): VersionComparisonResult {
+    const saved = this.records;
+    try {
+      const verGroups = this.autoGroup('version');
+      let targetGroups = verGroups.groups;
+      if (versions && versions.length > 0) {
+        targetGroups = targetGroups.filter((g) => versions.includes(g.key));
+      }
+      targetGroups = targetGroups.filter((g) => g.records.length > 0).sort((a, b) => a.key.localeCompare(b.key));
+
+      const versionSummaries = targetGroups.map((g) => ({
+        version: g.key,
+        label: `v${g.key}`,
+        count: g.records.length,
+        completionRate: this.mergeSummaries(g.records).completionRate,
+        averageScore: this.mergeSummaries(g.records).averageScore ?? null,
+      }));
+
+      const compGroups: ComparisonGroup[] = targetGroups.map((g) => ({
+        id: g.key,
+        label: `v${g.key}（${g.records.length}份）`,
+        summary: this.mergeSummaries(g.records),
+      }));
+
+      const comparison = compGroups.length > 1
+        ? StatisticsCalculator.compareSummaries(compGroups)
+        : {
+            groups: compGroups,
+            completionRates: { key: 'completion', label: '完成率', values: [], winner: undefined },
+            averageScores: { key: 'avgScore', label: '平均分', values: [], winner: undefined },
+            weightedAverages: { key: 'weightedAvg', label: '加权平均', values: [], winner: undefined },
+            requiredCompletionRates: { key: 'requiredCompletion', label: '必填完成率', values: [], winner: undefined },
+            optionDistributionMap: {},
+            keywordsMap: {},
+          };
+
+      const improvements: string[] = [];
+      const regressions: string[] = [];
+      const differences: { metric: string; bestVersion: string; worstVersion: string; delta: number }[] = [];
+
+      if (versionSummaries.length >= 2) {
+        const latest = versionSummaries[versionSummaries.length - 1];
+        const prev = versionSummaries[versionSummaries.length - 2];
+        if (latest.completionRate > prev.completionRate) {
+          improvements.push(`完成率从 ${Math.round(prev.completionRate * 100)}% → ${Math.round(latest.completionRate * 100)}%（+${Math.round((latest.completionRate - prev.completionRate) * 100)}pp）`);
+        } else if (latest.completionRate < prev.completionRate) {
+          regressions.push(`完成率从 ${Math.round(prev.completionRate * 100)}% → ${Math.round(latest.completionRate * 100)}%（-${Math.round((prev.completionRate - latest.completionRate) * 100)}pp）`);
+        }
+        if (latest.averageScore !== null && prev.averageScore !== null) {
+          if (latest.averageScore > prev.averageScore) {
+            improvements.push(`平均分从 ${prev.averageScore.toFixed(1)} → ${latest.averageScore.toFixed(1)}`);
+          } else if (latest.averageScore < prev.averageScore) {
+            regressions.push(`平均分从 ${prev.averageScore.toFixed(1)} → ${latest.averageScore.toFixed(1)}`);
+          }
+        }
+
+        const diffMetrics = ['completionRates', 'averageScores', 'weightedAverages'];
+        for (const mKey of diffMetrics) {
+          const metric = (comparison as unknown as Record<string, ComparisonMetric>)[mKey];
+          if (!metric || metric.values.length < 2) continue;
+          const nums = metric.values.filter((v): v is { groupId: string; value: number } => typeof v.value === 'number');
+          if (nums.length < 2) continue;
+          const best = nums.reduce((a, b) => b.value > a.value ? b : a);
+          const worst = nums.reduce((a, b) => b.value < a.value ? b : a);
+          differences.push({
+            metric: metric.label,
+            bestVersion: best.groupId,
+            worstVersion: worst.groupId,
+            delta: Math.round((best.value - worst.value) * 1000) / 1000,
+          });
+        }
+      }
+
+      return {
+        versions: versionSummaries.map((v) => v.version),
+        generatedAt: Date.now(),
+        totalSubmissions: versionSummaries.reduce((s, v) => s + v.count, 0),
+        versionSummaries,
+        comparison,
+        improvements,
+        regressions,
+        differences,
+      };
+    } finally {
+      this.records = saved;
+    }
+  }
+
+  exportBusinessReport(
+    filter: AnalysisFilter,
+    exportedBy: string = 'SurveySDK'
+  ): BusinessExportResult {
+    const saved = this.records;
+    this.records = this.applyFilter(filter);
+
+    try {
+      const startStr = filter.startDate || new Date(this.records.length > 0 ? this.records[0].submittedAt : Date.now()).toISOString().slice(0, 10);
+      const endStr = filter.endDate || new Date().toISOString().slice(0, 10);
+
+      const overall = this.records.length > 0 ? this.mergeSummaries(this.records) : null;
+      const avgCompletion = overall ? overall.completionRate : 0;
+      const avgScore = overall?.averageScore ?? null;
+
+      const deptGroups = this.autoGroup('department');
+      const departmentStats = deptGroups.groups.map((g) => {
+        const s = this.mergeSummaries(g.records);
+        return {
+          department: g.label,
+          count: g.records.length,
+          completionRate: s.completionRate,
+          averageScore: s.averageScore ?? null,
+        };
+      }).sort((a, b) => b.count - a.count);
+
+      const verGroups = this.autoGroup('version');
+      const versionStats = verGroups.groups.map((g) => {
+        const s = this.mergeSummaries(g.records);
+        return {
+          version: g.label,
+          count: g.records.length,
+          completionRate: s.completionRate,
+          averageScore: s.averageScore ?? null,
+        };
+      }).sort((a, b) => b.count - a.count);
+
+      let topDept: string | null = null;
+      let bottomDept: string | null = null;
+      if (departmentStats.length > 0) {
+        const sorted = [...departmentStats].sort((a, b) => (b.averageScore ?? 0) - (a.averageScore ?? 0));
+        topDept = sorted[0].department;
+        bottomDept = sorted[sorted.length - 1].department;
+      }
+
+      const topHighlights: string[] = [];
+      topHighlights.push(`统计周期：${startStr} ~ ${endStr}`);
+      topHighlights.push(`总提交份数：${this.records.length} 份`);
+      topHighlights.push(`平均完成率：${Math.round(avgCompletion * 100)}%`);
+      if (avgScore !== null) {
+        topHighlights.push(`总体平均分：${avgScore.toFixed(1)} 分`);
+      }
+      if (topDept && departmentStats.length > 1) {
+        topHighlights.push(`评分最高部门：${topDept}`);
+      }
+      for (const d of departmentStats) {
+        topHighlights.push(`${d.department}：${d.count} 份，完成率 ${Math.round(d.completionRate * 100)}%${d.averageScore !== null ? `，平均分 ${d.averageScore.toFixed(1)}` : ''}`);
+      }
+
+      const surveyId = this.records.length > 0 ? this.records[0].surveyId : '';
+      const surveyTitle = this.records.length > 0 ? this.records[0].summary.surveyTitle : '';
+
+      return {
+        generatedAt: Date.now(),
+        surveyId,
+        surveyTitle,
+        period: { start: startStr, end: endStr },
+        filters: filter,
+        summary: {
+          totalSubmissions: this.records.length,
+          avgCompletionRate: avgCompletion,
+          avgScore,
+          topDepartment: topDept,
+          bottomDepartment: bottomDept,
+        },
+        departmentStats,
+        versionStats,
+        topHighlights,
+        exportedBy,
+      };
+    } finally {
+      this.records = saved;
+    }
   }
 
   private mergeSummaries(records: SubmissionRecord[]): RichResultSummary {

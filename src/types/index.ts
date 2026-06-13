@@ -528,6 +528,101 @@ export interface WeeklyReportResult {
   highlights: string[];
 }
 
+export interface MonthlyReportResult extends WeeklyReportResult {
+  month: string;
+  weeklyBreakdown: WeeklyReportResult[];
+  monthOverMonth: { metric: string; current: number | null; previous: number | null; changeRate: number }[];
+}
+
+export interface VersionComparisonResult {
+  versions: string[];
+  generatedAt: number;
+  totalSubmissions: number;
+  versionSummaries: { version: string; label: string; count: number; completionRate: number; averageScore: number | null }[];
+  comparison: SurveyComparisonResult;
+  improvements: string[];
+  regressions: string[];
+  differences: { metric: string; bestVersion: string; worstVersion: string; delta: number }[];
+}
+
+export interface AnalysisFilter {
+  startDate?: string;
+  endDate?: string;
+  departments?: string[];
+  versions?: string[];
+  customFilter?: (r: SubmissionRecord) => boolean;
+}
+
+export interface BusinessExportResult {
+  generatedAt: number;
+  surveyId: string;
+  surveyTitle: string;
+  period: { start: string; end: string };
+  filters: AnalysisFilter;
+  summary: {
+    totalSubmissions: number;
+    avgCompletionRate: number;
+    avgScore: number | null;
+    topDepartment: string | null;
+    bottomDepartment: string | null;
+  };
+  departmentStats: { department: string; count: number; completionRate: number; averageScore: number | null }[];
+  versionStats: { version: string; count: number; completionRate: number; averageScore: number | null }[];
+  topHighlights: string[];
+  exportedBy: string;
+}
+
+export type WorkbenchActionType =
+  | 'approve'
+  | 'reject'
+  | 'assign'
+  | 'followup'
+  | 'escalate'
+  | 'notify'
+  | 'createTicket'
+  | 'custom';
+
+export interface WorkbenchAction {
+  id: string;
+  type: WorkbenchActionType;
+  label: string;
+  variant: 'primary' | 'secondary' | 'ghost' | 'danger';
+  icon?: string;
+  requiredRole?: string;
+  visible?: (ctx: SubmissionResultContext) => boolean;
+  handler: (ctx: SubmissionResultContext, options?: Record<string, unknown>) => Promise<void> | void;
+}
+
+export interface WorkbenchConfig {
+  title?: string;
+  subtitle?: string;
+  actions: WorkbenchAction[];
+  showSummaryHeader?: boolean;
+  customSummary?: (ctx: SubmissionResultContext) => string;
+  scenarioTag?: string;
+}
+
+export interface SyncContainerConfig {
+  containerId: string;
+  containerType: 'toolbar' | 'titlebar' | 'sideSummary' | 'listRow' | 'custom';
+  subscribeEvents?: ToolbarSyncEventType[];
+  render?: (state: ToolbarSyncState, container: HTMLElement) => void;
+  actionHandlers?: Partial<Record<ToolbarSyncEventType, (state: ToolbarSyncState) => void>>;
+}
+
+export interface SyncBroadcastMessage {
+  sourceContainerId: string;
+  event: ToolbarSyncEventType;
+  state: ToolbarSyncState;
+  timestamp: number;
+}
+
+export interface CrossContainerSyncResult {
+  registeredContainers: string[];
+  broadcastCount: number;
+  lastSyncAt: number;
+}
+
 export interface ToolbarSyncState extends ToolbarState {
   lastEvent: string;
   lastEventAt: number;
