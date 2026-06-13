@@ -11,3 +11,6 @@ export {
   type SubmitAdapter,
 } from './core/SubmitAdapter';
 export { DOMRenderer } from './renderer/DOMRenderer';
+export { AnalysisCenter } from './core/AnalysisCenter';
+export { ToolbarSync } from './core/ToolbarSync';
+export { ResultCenter } from './core/ResultCenter';

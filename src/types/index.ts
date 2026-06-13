@@ -472,3 +472,123 @@ export interface SurveyRenderer {
 export interface SubmitAdapter {
   submit(payload: SubmitPayload): Promise<SubmitResult>;
 }
+
+export interface SubmissionRecord {
+  submissionId: string;
+  surveyId: string;
+  surveyVersion?: string;
+  user: UserContext;
+  answers: AnswersMap;
+  submittedAt: number;
+  durationSeconds?: number;
+  summary: RichResultSummary;
+}
+
+export type GroupDimension = 'department' | 'timePeriod' | 'version' | 'custom';
+
+export interface AutoGroupResult {
+  dimension: GroupDimension;
+  groups: { key: string; label: string; records: SubmissionRecord[] }[];
+}
+
+export interface TrendPoint {
+  period: string;
+  value: number;
+  count: number;
+}
+
+export interface TrendResult {
+  metric: string;
+  label: string;
+  points: TrendPoint[];
+  direction: 'up' | 'down' | 'stable';
+  changeRate: number;
+}
+
+export interface KeywordChangeResult {
+  questionId: string;
+  questionTitle: string;
+  periods: {
+    period: string;
+    keywords: string[];
+    emerging: string[];
+    declining: string[];
+  }[];
+}
+
+export interface WeeklyReportResult {
+  surveyId: string;
+  generatedAt: number;
+  period: { start: string; end: string };
+  totalSubmissions: number;
+  groupSummaries: { key: string; label: string; completionRate: number; averageScore: number | null; count: number }[];
+  trends: TrendResult[];
+  keywordChanges: KeywordChangeResult[];
+  comparison: SurveyComparisonResult | null;
+  highlights: string[];
+}
+
+export interface ToolbarSyncState extends ToolbarState {
+  lastEvent: string;
+  lastEventAt: number;
+  isSubmitting: boolean;
+  lastSubmitResult: SubmitResult | null;
+  lastRichSummary: RichResultSummary | null;
+}
+
+export type ToolbarSyncEventType =
+  | 'stateChange'
+  | 'answerUpdate'
+  | 'modeChange'
+  | 'draftSave'
+  | 'submitStart'
+  | 'submitComplete'
+  | 'validationUpdate';
+
+export interface ToolbarSyncSubscription {
+  id: string;
+  callback: (state: ToolbarSyncState, event: ToolbarSyncEventType) => void;
+  events?: ToolbarSyncEventType[];
+}
+
+export interface ResultBlock {
+  id: string;
+  type: 'completion' | 'score' | 'rating' | 'options' | 'texts' | 'keywords' | 'duration' | 'submissionId' | 'custom';
+  title?: string;
+  visible?: boolean;
+  order?: number;
+  customRenderer?: (data: SubmissionResultContext, container: HTMLElement) => void;
+}
+
+export interface SubmissionResultContext {
+  submissionId: string;
+  submittedAt: number;
+  durationSeconds?: number;
+  surveyId: string;
+  surveyTitle: string;
+  surveyVersion?: string;
+  user: UserContext | null;
+  answers: AnswersMap;
+  summary: RichResultSummary;
+  customFields: Record<string, unknown>;
+}
+
+export interface ResultCenterConfig {
+  blocks: ResultBlock[];
+  customFields?: Record<string, (ctx: SubmissionResultContext) => unknown>;
+  secondaryActions?: ResultCenterAction[];
+}
+
+export interface ResultCenterAction {
+  id: string;
+  label: string;
+  type: 'primary' | 'secondary' | 'ghost';
+  icon?: string;
+  handler: (ctx: SubmissionResultContext) => void;
+}
+
+export interface ResultCenterSnapshot {
+  context: SubmissionResultContext;
+  renderedAt: number;
+  source: 'completionPage' | 'detailDrawer' | 'listCard';
+}

@@ -256,6 +256,132 @@
     }
     .back-link a:hover { text-decoration: underline; }
 
+    .sync-panel {
+      margin-top: 16px;
+      background: rgba(6, 78, 59, 0.6);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .sync-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #6ee7b7;
+      margin: 0 0 10px 0;
+    }
+    .sync-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 8px;
+    }
+    .sync-item {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .sync-label { font-size: 10px; color: #6ee7b7; margin-bottom: 3px; }
+    .sync-value { font-size: 14px; font-weight: 700; color: #ecfdf5; }
+    .sync-event-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      background: rgba(16, 185, 129, 0.3);
+      color: #a7f3d0;
+      margin-top: 4px;
+    }
+
+    .analysis-section {
+      margin-top: 16px;
+      background: rgba(6, 78, 59, 0.6);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: 12px;
+      padding: 16px;
+      display: none;
+    }
+    .analysis-section.visible { display: block; }
+    .analysis-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #6ee7b7;
+      margin: 0 0 10px 0;
+    }
+    .trend-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    .trend-table th {
+      text-align: left;
+      padding: 6px 8px;
+      color: #6ee7b7;
+      border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+      font-size: 10px;
+    }
+    .trend-table td {
+      padding: 5px 8px;
+      color: #d1fae5;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+    }
+    .trend-up { color: #34d399; font-weight: 700; }
+    .trend-down { color: #f87171; font-weight: 700; }
+    .trend-stable { color: #fbbf24; font-weight: 700; }
+
+    .result-center-section {
+      margin-top: 16px;
+      background: rgba(6, 78, 59, 0.6);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: 12px;
+      padding: 16px;
+      display: none;
+    }
+    .result-center-section.visible { display: block; }
+    .rc-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #6ee7b7;
+      margin: 0 0 10px 0;
+    }
+    .rc-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+    .rc-tab {
+      padding: 5px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      background: rgba(16, 185, 129, 0.1);
+      color: #6ee7b7;
+      font-size: 11px;
+      cursor: pointer;
+      font-weight: 600;
+      font-family: inherit;
+    }
+    .rc-tab.active {
+      background: rgba(16, 185, 129, 0.35);
+      color: #ecfdf5;
+      border-color: #10b981;
+    }
+    .rc-content {
+      background: rgba(0, 0, 0, 0.15);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .rc-consistency {
+      margin-top: 8px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .rc-consistency.pass { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .rc-consistency.fail { background: rgba(248, 113, 113, 0.2); color: #f87171; }
+
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: rgba(16, 185, 129, 0.3); border-radius: 3px; }
@@ -314,10 +440,60 @@
       </div>
     </div>
 
+    <!-- 双向同步订阅面板 -->
+    <div class="sync-panel">
+      <div class="sync-title">🔗 双向同步订阅（多面板共享同一份实时状态）</div>
+      <div class="sync-grid" id="sync-grid">
+        <div class="sync-item">
+          <div class="sync-label">完成率</div>
+          <div class="sync-value" id="sync-rate">0%</div>
+        </div>
+        <div class="sync-item">
+          <div class="sync-label">未答必填</div>
+          <div class="sync-value" id="sync-req">-</div>
+        </div>
+        <div class="sync-item">
+          <div class="sync-label">模式</div>
+          <div class="sync-value" id="sync-mode">一题一页</div>
+        </div>
+        <div class="sync-item">
+          <div class="sync-label">当前题</div>
+          <div class="sync-value" id="sync-curr">-</div>
+        </div>
+        <div class="sync-item">
+          <div class="sync-label">提交状态</div>
+          <div class="sync-value" id="sync-submit">未提交</div>
+        </div>
+        <div class="sync-item">
+          <div class="sync-label">最近事件</div>
+          <div class="sync-value" id="sync-event">-</div>
+          <div id="sync-event-badge"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- 对比统计演示 -->
     <div class="comparison-section" id="comparison-section">
       <div class="comparison-title">📊 多提交对比统计演示（模拟3份提交结果）</div>
       <div class="comparison-grid" id="comparison-metrics"></div>
+    </div>
+
+    <!-- 分析中心 -->
+    <div class="analysis-section" id="analysis-section">
+      <div class="analysis-title">📈 分析中心 · 趋势与关键词变化</div>
+      <div id="analysis-content"></div>
+    </div>
+
+    <!-- 结果中心 -->
+    <div class="result-center-section" id="result-center-section">
+      <div class="rc-title">🎯 结果中心 · 同一份结果三处复用</div>
+      <div class="rc-tabs">
+        <button class="rc-tab active" onclick="window.showRcTab('completionPage')">完成页</button>
+        <button class="rc-tab" onclick="window.showRcTab('detailDrawer')">详情抽屉</button>
+        <button class="rc-tab" onclick="window.showRcTab('listCard')">列表摘要卡</button>
+      </div>
+      <div class="rc-content" id="rc-content">提交后查看结果中心</div>
+      <div id="rc-consistency"></div>
     </div>
 
     <div class="back-link">
@@ -538,11 +714,58 @@
     sdk.mount('#survey-root');
     updateToolbar();
 
+    // 双向同步订阅：多面板共享实时状态
+    sdk.subscribeToolbar(function(state, event) {
+      document.getElementById('sync-rate').textContent = pct(state.completionRate);
+      document.getElementById('sync-req').textContent = state.requiredUnansweredCount + ' 道';
+      document.getElementById('sync-mode').textContent = state.displayMode === 'single' ? '一题一页' : '整页展开';
+      document.getElementById('sync-curr').textContent = '第 ' + (state.currentQuestionIndex + 1) + ' 题';
+      document.getElementById('sync-submit').textContent = state.isSubmitting ? '提交中...' : (state.lastSubmitResult ? '已提交' : '未提交');
+      document.getElementById('sync-event').textContent = event;
+      document.getElementById('sync-event-badge').innerHTML = '<span class="sync-event-badge">' + event + '</span>';
+    });
+
+    // 结果中心标签切换
+    var currentRcTab = 'completionPage';
+    window.showRcTab = function(source) {
+      currentRcTab = source;
+      var tabs = document.querySelectorAll('.rc-tab');
+      tabs.forEach(function(t) { t.classList.remove('active'); });
+      event.target.classList.add('active');
+
+      var ctx = sdk.getSubmissionResultContext(source);
+      var el = document.getElementById('rc-content');
+      if (!ctx) {
+        el.innerHTML = '<div style="color:#6ee7b7; text-align:center; padding:16px;">提交后查看结果</div>';
+        return;
+      }
+
+      var sourceLabel = source === 'completionPage' ? '完成页' : source === 'detailDrawer' ? '详情抽屉' : '列表摘要卡';
+      el.innerHTML =
+        '<div style="margin-bottom:8px; font-size:11px; color:#6ee7b7;">来源: ' + sourceLabel + '</div>' +
+        '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:6px;">' +
+          '<div class="sync-item"><div class="sync-label">提交编号</div><div class="sync-value">' + ctx.submissionId + '</div></div>' +
+          '<div class="sync-item"><div class="sync-label">完成率</div><div class="sync-value">' + pct(ctx.summary.completionRate) + '</div></div>' +
+          '<div class="sync-item"><div class="sync-label">平均分</div><div class="sync-value">' + (ctx.summary.averageScore != null ? ctx.summary.averageScore.toFixed(1) : 'N/A') + '</div></div>' +
+          '<div class="sync-item"><div class="sync-label">时长</div><div class="sync-value">' + (ctx.durationSeconds != null ? Math.floor(ctx.durationSeconds / 60) + '分' + ctx.durationSeconds % 60 + '秒' : 'N/A') + '</div></div>' +
+          '<div class="sync-item"><div class="sync-label">问卷</div><div class="sync-value">' + ctx.surveyTitle + '</div></div>' +
+          '<div class="sync-item"><div class="sync-label">用户</div><div class="sync-value">' + (ctx.user ? ctx.user.username || ctx.user.userId : 'N/A') + '</div></div>' +
+        '</div>';
+
+      var ok = sdk.verifyResultConsistency();
+      var cEl = document.getElementById('rc-consistency');
+      cEl.className = 'rc-consistency ' + (ok ? 'pass' : 'fail');
+      cEl.textContent = ok ? '✅ 三处结果一致性验证通过' : '❌ 三处结果不一致';
+    };
+
     console.log('%c✅ SurveySDK (UMD版) 已挂载成功！', 'color:#10b981; font-weight:bold; font-size:14px;');
     console.log('💡 window.__sdk 可直接访问实例');
     console.log('💡 window.setMode("all") 切换整页模式');
     console.log('💡 sdk.getToolbarState() 获取工具条状态');
     console.log('💡 sdk.getRichResultSummary() 获取厚摘要');
+    console.log('💡 sdk.subscribeToolbar(cb) 订阅实时状态');
+    console.log('💡 sdk.getAnalysisCenter() 分析中心');
+    console.log('💡 sdk.getResultCenter() 结果中心');
 
     // 对比统计演示
     function showComparisonDemo() {
@@ -616,6 +839,90 @@
       } catch(e) {
         console.warn('对比统计演示出错:', e);
       }
+
+      showAnalysisDemo();
+      showResultCenterDemo();
+    }
+
+    function showAnalysisDemo() {
+      var section = document.getElementById('analysis-section');
+      section.classList.add('visible');
+
+      var ac = sdk.getAnalysisCenter();
+
+      var now = Date.now();
+      var mockRecords = [];
+      var departments = ['研发部', '产品部', '设计部', '市场部', '运营部'];
+      var deptKeys = ['rd', 'pm', 'design', 'marketing', 'ops'];
+      for (var d = 0; d < departments.length; d++) {
+        for (var w = 0; w < 4; w++) {
+          var weekTs = now - (3 - w) * 7 * 86400000 - Math.floor(Math.random() * 86400000);
+          var summary = sdk.getRichResultSummary();
+          var record = {
+            submissionId: 'MOCK_' + deptKeys[d] + '_W' + (w + 1),
+            surveyId: summary.surveyId,
+            surveyVersion: '1.0.0',
+            user: { userId: 'U_' + deptKeys[d] + '_' + w, department: departments[d] },
+            answers: {},
+            submittedAt: weekTs,
+            durationSeconds: 120 + Math.floor(Math.random() * 180),
+            summary: Object.assign({}, summary, {
+              completionRate: 0.6 + Math.random() * 0.4,
+              averageScore: 3 + Math.random() * 2,
+              ratingOverview: Object.assign({}, summary.ratingOverview, {
+                weightedAverage: 3 + Math.random() * 2,
+              }),
+            }),
+          };
+          mockRecords.push(record);
+        }
+      }
+
+      ac.ingest(mockRecords);
+
+      var grouped = ac.autoGroup('department');
+      var trends = ac.getSubmissionTrends('completionRate', 'week');
+      var kwChanges = ac.getKeywordChanges('week');
+
+      var html = '<div style="margin-bottom:12px;">';
+      html += '<div style="font-size:11px; color:#6ee7b7; margin-bottom:8px;">已导入 ' + mockRecords.length + ' 条模拟提交记录，按部门自动分组：</div>';
+      html += '<div style="display:flex; gap:6px; flex-wrap:wrap;">';
+      for (var i = 0; i < grouped.groups.length; i++) {
+        html += '<span class="sync-event-badge">' + grouped.groups[i].label + ' (' + grouped.groups[i].records.length + '条)</span>';
+      }
+      html += '</div></div>';
+
+      if (trends.length > 0) {
+        html += '<div style="font-size:11px; color:#6ee7b7; margin-bottom:6px;">完成率趋势：</div>';
+        html += '<table class="trend-table"><tr><th>周期</th><th>数值</th><th>样本</th><th>方向</th></tr>';
+        for (var t = 0; t < trends.length; t++) {
+          for (var p = 0; p < trends[t].points.length; p++) {
+            var pt = trends[t].points[p];
+            var dirClass = trends[t].direction === 'up' ? 'trend-up' : trends[t].direction === 'down' ? 'trend-down' : 'trend-stable';
+            var dirIcon = trends[t].direction === 'up' ? '↑' : trends[t].direction === 'down' ? '↓' : '→';
+            html += '<tr><td>' + pt.period + '</td><td>' + (pt.value * 100).toFixed(1) + '%</td><td>' + pt.count + '</td><td class="' + dirClass + '">' + dirIcon + ' ' + (trends[t].changeRate * 100).toFixed(1) + '%</td></tr>';
+          }
+        }
+        html += '</table>';
+      }
+
+      var report = ac.generateWeeklyReport();
+      if (report.highlights.length > 0) {
+        html += '<div style="margin-top:10px; font-size:11px; color:#6ee7b7;">周报亮点：</div>';
+        html += '<ul style="margin:4px 0; padding-left:16px; font-size:11px; color:#d1fae5;">';
+        for (var h = 0; h < report.highlights.length; h++) {
+          html += '<li>' + report.highlights[h] + '</li>';
+        }
+        html += '</ul>';
+      }
+
+      document.getElementById('analysis-content').innerHTML = html;
+    }
+
+    function showResultCenterDemo() {
+      var section = document.getElementById('result-center-section');
+      section.classList.add('visible');
+      window.showRcTab('completionPage');
     }
 
     function renderComparison(c) {

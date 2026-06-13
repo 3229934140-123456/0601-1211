@@ -24,8 +24,20 @@ import type {
   RenderContext,
   DisplayMode,
   ToolbarState,
+  ToolbarSyncState,
+  ToolbarSyncEventType,
   ComparisonGroup,
   SurveyComparisonResult,
+  SubmissionRecord,
+  GroupDimension,
+  AutoGroupResult,
+  TrendResult,
+  KeywordChangeResult,
+  WeeklyReportResult,
+  SubmissionResultContext,
+  ResultBlock,
+  ResultCenterConfig,
+  ResultCenterAction,
 } from './types';
 
 import { EventEmitter } from './core/EventEmitter';
@@ -37,6 +49,9 @@ import {
 } from './core/SubmitAdapter';
 import { StatisticsCalculator } from './core/StatisticsCalculator';
 import { DOMRenderer } from './renderer/DOMRenderer';
+import { AnalysisCenter } from './core/AnalysisCenter';
+import { ToolbarSync } from './core/ToolbarSync';
+import { ResultCenter } from './core/ResultCenter';
 
 const DEFAULT_CONFIG: Required<Pick<SDKConfig, 'autoSave' | 'autoSaveInterval' | 'storageKeyPrefix' | 'enableLogging' | 'startFromSavedProgress'>> =
   {
@@ -82,6 +97,10 @@ export class SurveySDK {
   private lastRichSummary: RichResultSummary | null = null;
   private pendingInvalidQuestionIds: string[] = [];
   private pendingHighlightId: string | null = null;
+  private analysisCenter: AnalysisCenter;
+  private toolbarSync: ToolbarSync;
+  private resultCenter: ResultCenter;
+  private isSubmitting: boolean = false;
 
   constructor(survey: Survey, config?: SDKConfig) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -101,8 +120,13 @@ export class SurveySDK {
       ? (msg, ...args) => console.log(`[SurveySDK] ${msg}`, ...args)
       : () => {};
 
+    this.analysisCenter = new AnalysisCenter();
+    this.toolbarSync = new ToolbarSync();
+    this.resultCenter = new ResultCenter(this.config.renderConfig?.successPageConfig as Partial<ResultCenterConfig> | undefined);
+
     this.engine.onUpdate(() => {
       this.renderIfMounted();
+      this.syncToolbarState('stateChange');
     });
 
     this.engine.setDisplayMode(this.renderConfig.displayMode);
@@ -144,6 +168,7 @@ export class SurveySDK {
     this.engine.setDisplayMode(mode);
     this.renderConfig.displayMode = mode;
     this.emit('displayModeChange', { from: prev, to: mode });
+    this.syncToolbarState('modeChange');
     this.logger(`显示模式切换: ${prev} -> ${mode}`);
     this.renderIfMounted();
   }
@@ -203,6 +228,9 @@ export class SurveySDK {
   destroy(): void {
     this.unmount();
     this.emitter.removeAllListeners();
+    this.analysisCenter.clear();
+    this.toolbarSync.destroy();
+    this.resultCenter.destroy();
   }
 
   setUser(user: UserContext): void {
@@ -226,6 +254,8 @@ export class SurveySDK {
       value,
       answers: this.engine.getAnswers(),
     });
+
+    this.syncToolbarState('answerUpdate');
 
     const newIndex = this.engine.getCurrentIndex();
     if (prevIndex !== newIndex) {
@@ -348,6 +378,7 @@ export class SurveySDK {
       if (this.renderer && this.renderer instanceof DOMRenderer) {
         this.renderer.setInvalidQuestionIds(result.invalidQuestionIds);
       }
+      this.syncToolbarState('validationUpdate');
     }
     return result;
   }
@@ -385,6 +416,7 @@ export class SurveySDK {
         completionRate: updatedRate.rate,
         status: 'draft_saved',
       });
+      this.syncToolbarState('draftSave');
       this.logger(
         `草稿保存成功 | ${updatedRate.answeredQuestions}/${updatedRate.totalQuestions}题 | ${Math.round(
           updatedRate.rate * 100
@@ -489,6 +521,8 @@ export class SurveySDK {
 
     this.emit('submit', { payload });
     this.setSubmittingState(true);
+    this.isSubmitting = true;
+    this.syncToolbarState('submitStart');
 
     try {
       const result = await this.submitAdapter.submit(payload);
@@ -520,6 +554,27 @@ export class SurveySDK {
           this.engine.getAnswers()
         );
 
+        this.resultCenter.buildContext({
+          result: enrichedResult,
+          summary: richSummary,
+          surveyId: survey.meta.id,
+          surveyTitle: survey.meta.title,
+          surveyVersion: survey.meta.version,
+          user: this.engine.getUser(),
+          answers: this.engine.getAnswers(),
+          durationSeconds: richSummary.durationSeconds,
+        });
+
+        this.resultCenter.getContextFor('completionPage');
+        this.resultCenter.getContextFor('detailDrawer');
+        this.resultCenter.getContextFor('listCard');
+
+        this.isSubmitting = false;
+        this.syncToolbarState('submitComplete', {
+          lastSubmitResult: enrichedResult,
+          lastRichSummary: richSummary,
+        });
+
         this.emit('submitSuccess', { result: enrichedResult, summary: richSummary });
         this.emit('complete', {
           answers: this.engine.getAnswers(),
@@ -550,6 +605,7 @@ export class SurveySDK {
       this.logger('提交异常', error);
       throw error;
     } finally {
+      this.isSubmitting = false;
       this.setSubmittingState(false);
     }
   }
@@ -704,6 +760,69 @@ export class SurveySDK {
     return this.lastRichSummary;
   }
 
+  getAnalysisCenter(): AnalysisCenter {
+    return this.analysisCenter;
+  }
+
+  getToolbarSync(): ToolbarSync {
+    return this.toolbarSync;
+  }
+
+  getResultCenter(): ResultCenter {
+    return this.resultCenter;
+  }
+
+  subscribeToolbar(
+    callback: (state: ToolbarSyncState, event: ToolbarSyncEventType) => void,
+    events?: ToolbarSyncEventType[]
+  ): () => void {
+    return this.toolbarSync.subscribe(callback, events);
+  }
+
+  ingestSubmissionRecords(records: SubmissionRecord[]): void {
+    this.analysisCenter.ingest(records);
+  }
+
+  autoGroupSubmissions(dimension: GroupDimension, customKey?: (r: SubmissionRecord) => string): AutoGroupResult {
+    return this.analysisCenter.autoGroup(dimension, customKey);
+  }
+
+  getAggregatedSummary(dimension: GroupDimension, customKey?: (r: SubmissionRecord) => string) {
+    return this.analysisCenter.getAggregatedSummary(dimension, customKey);
+  }
+
+  getSubmissionTrends(metric: 'completionRate' | 'averageScore' | 'weightedAverage' | 'nps', dimension?: 'week' | 'month'): TrendResult[] {
+    return this.analysisCenter.getTrends(metric, dimension);
+  }
+
+  getKeywordChanges(dimension?: 'week' | 'month'): KeywordChangeResult[] {
+    return this.analysisCenter.getKeywordChanges(dimension);
+  }
+
+  generateWeeklyReport(startDate?: string, endDate?: string): WeeklyReportResult {
+    return this.analysisCenter.generateWeeklyReport(startDate, endDate);
+  }
+
+  getSubmissionResultContext(source: 'completionPage' | 'detailDrawer' | 'listCard'): SubmissionResultContext | null {
+    return this.resultCenter.getContextFor(source);
+  }
+
+  getResultCenterVisibleBlocks(): ResultBlock[] {
+    return this.resultCenter.getVisibleBlocks();
+  }
+
+  getResultCenterActions(): ResultCenterAction[] {
+    return this.resultCenter.getSecondaryActions();
+  }
+
+  configureResultCenter(config: Partial<ResultCenterConfig>): void {
+    this.resultCenter.updateConfig(config);
+  }
+
+  verifyResultConsistency(): boolean {
+    return this.resultCenter.verifyConsistency();
+  }
+
   on<K extends SurveyEventName>(
     eventName: K,
     callback: EventCallback<K>
@@ -828,5 +947,20 @@ export class SurveySDK {
       this.renderer.setSubmitting(value);
       this.render();
     }
+  }
+
+  private syncToolbarState(
+    event: ToolbarSyncEventType,
+    extras?: {
+      lastSubmitResult?: SubmitResult | null;
+      lastRichSummary?: RichResultSummary | null;
+    }
+  ): void {
+    const toolbarState = this.getToolbarState();
+    this.toolbarSync.updateFromToolbarState(toolbarState, event, {
+      isSubmitting: this.isSubmitting,
+      lastSubmitResult: extras?.lastSubmitResult ?? this.lastSubmittedResult,
+      lastRichSummary: extras?.lastRichSummary ?? this.lastRichSummary,
+    });
   }
 }
