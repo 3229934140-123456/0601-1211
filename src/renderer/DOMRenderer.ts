@@ -9,6 +9,7 @@ import type {
   TextQuestion,
   Answer,
   RenderConfig,
+  DisplayMode,
 } from '../types';
 import { StatisticsCalculator } from '../core/StatisticsCalculator';
 
@@ -18,12 +19,13 @@ const DEFAULT_BUTTON_TEXTS = {
   submit: '提交问卷',
   restart: '重新开始',
   saveDraft: '保存草稿',
+  toggleMode: '切换模式',
 };
 
 const CSS_STYLES = `
 .survey-sdk-container {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
   padding: 24px;
   background: #ffffff;
@@ -32,12 +34,18 @@ const CSS_STYLES = `
   color: #1f2937;
 }
 .survey-sdk-header {
-  margin-bottom: 28px;
+  margin-bottom: 20px;
   padding-bottom: 20px;
   border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
 }
+.survey-sdk-header-info { flex: 1; min-width: 260px; }
 .survey-sdk-title {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   margin: 0 0 8px 0;
   color: #111827;
@@ -48,13 +56,36 @@ const CSS_STYLES = `
   margin: 0;
   line-height: 1.6;
 }
+.survey-sdk-mode-switch {
+  display: inline-flex;
+  background: #f3f4f6;
+  padding: 3px;
+  border-radius: 8px;
+  gap: 2px;
+}
+.survey-sdk-mode-btn {
+  padding: 6px 14px;
+  font-size: 12px;
+  border: none;
+  background: transparent;
+  color: #374151;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-family: inherit;
+}
+.survey-sdk-mode-btn.active {
+  background: #ffffff;
+  color: #3b82f6;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
 .survey-sdk-progress-bar {
   width: 100%;
   height: 8px;
   background: #e5e7eb;
   border-radius: 4px;
   overflow: hidden;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 .survey-sdk-progress-fill {
   height: 100%;
@@ -66,14 +97,42 @@ const CSS_STYLES = `
   font-size: 13px;
   color: #6b7280;
   margin-bottom: 8px;
-  text-align: right;
+  display: flex;
+  justify-content: space-between;
 }
 .survey-sdk-question-card {
   background: #f9fafb;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   padding: 24px;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
+  position: relative;
+  transition: all 0.2s ease;
+  scroll-margin-top: 20px;
+}
+.survey-sdk-question-card.highlight {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+  animation: survey-pulse 1.2s ease-in-out;
+}
+.survey-sdk-question-card.invalid {
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+.survey-sdk-question-card.answered {
+  border-color: #10b981;
+  background: #ecfdf5;
+}
+@keyframes survey-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15); }
+  50% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0.05); }
+}
+.survey-sdk-question-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
 }
 .survey-sdk-question-index {
   display: inline-block;
@@ -83,15 +142,31 @@ const CSS_STYLES = `
   background: #eff6ff;
   padding: 4px 10px;
   border-radius: 20px;
-  margin-bottom: 12px;
 }
+.survey-sdk-question-type {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #e5e7eb;
+  color: #374151;
+  font-weight: 600;
+}
+.survey-sdk-question-status {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  margin-left: auto;
+}
+.survey-sdk-question-status.answered { background: #d1fae5; color: #065f46; }
+.survey-sdk-question-status.required { background: #fee2e2; color: #991b1b; }
 .survey-sdk-question-required {
   color: #ef4444;
   margin-left: 4px;
   font-weight: 700;
 }
 .survey-sdk-question-title {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
   margin: 0 0 8px 0;
   color: #111827;
@@ -100,7 +175,7 @@ const CSS_STYLES = `
 .survey-sdk-question-desc {
   font-size: 13px;
   color: #6b7280;
-  margin: 0 0 20px 0;
+  margin: 0 0 18px 0;
 }
 .survey-sdk-error {
   background: #fef2f2;
@@ -110,6 +185,37 @@ const CSS_STYLES = `
   font-size: 13px;
   margin-bottom: 16px;
   border-left: 3px solid #ef4444;
+}
+.survey-sdk-invalid-list {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+}
+.survey-sdk-invalid-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #991b1b;
+  margin: 0 0 8px 0;
+}
+.survey-sdk-invalid-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.survey-sdk-invalid-link {
+  font-size: 12px;
+  padding: 4px 10px;
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: 20px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.survey-sdk-invalid-link:hover {
+  background: #fecaca;
 }
 .survey-sdk-options {
   display: flex;
@@ -215,11 +321,13 @@ const CSS_STYLES = `
   align-items: center;
   gap: 12px;
   margin-top: 8px;
+  flex-wrap: wrap;
 }
 .survey-sdk-actions-left,
 .survey-sdk-actions-right {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
 .survey-sdk-btn {
   padding: 10px 20px;
@@ -260,9 +368,17 @@ const CSS_STYLES = `
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(16,185,129,0.35);
 }
+.survey-sdk-btn-warning {
+  background: #fef3c7;
+  color: #92400e;
+  border: 2px solid #fde68a;
+}
+.survey-sdk-btn-warning:hover:not(:disabled) {
+  background: #fde68a;
+}
 .survey-sdk-success-page {
   text-align: center;
-  padding: 40px 20px;
+  padding: 32px 20px;
 }
 .survey-sdk-success-icon {
   width: 80px;
@@ -272,38 +388,42 @@ const CSS_STYLES = `
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 24px;
+  margin: 0 auto 20px;
   color: white;
   font-size: 40px;
   font-weight: bold;
 }
 .survey-sdk-success-title {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
-  margin: 0 0 12px 0;
+  margin: 0 0 8px 0;
   color: #111827;
 }
 .survey-sdk-success-msg {
-  font-size: 15px;
+  font-size: 14px;
   color: #6b7280;
-  margin: 0 0 24px 0;
+  margin: 0 0 20px 0;
+  line-height: 1.6;
 }
 .survey-sdk-summary-card {
   background: #f9fafb;
   border-radius: 10px;
-  padding: 20px;
+  padding: 18px;
   text-align: left;
-  margin: 24px 0;
+  margin: 20px 0;
+}
+.survey-sdk-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
 }
 .survey-sdk-summary-row {
   display: flex;
   justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px solid #e5e7eb;
-  font-size: 14px;
-}
-.survey-sdk-summary-row:last-child {
-  border-bottom: none;
+  padding: 8px 10px;
+  background: #ffffff;
+  border-radius: 6px;
+  font-size: 13px;
 }
 .survey-sdk-summary-label {
   color: #6b7280;
@@ -313,10 +433,11 @@ const CSS_STYLES = `
   font-weight: 600;
 }
 .survey-sdk-highlight {
-  padding: 12px;
+  padding: 10px 12px;
   border-radius: 8px;
   margin-top: 8px;
   font-size: 13px;
+  line-height: 1.5;
 }
 .survey-sdk-highlight.good {
   background: #ecfdf5;
@@ -328,18 +449,24 @@ const CSS_STYLES = `
 }
 .survey-sdk-loading {
   display: inline-block;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border: 2px solid #ffffff;
   border-bottom-color: transparent;
   border-radius: 50%;
   animation: survey-spin 0.8s linear infinite;
   vertical-align: middle;
-  margin-right: 8px;
+  margin-right: 6px;
 }
 @keyframes survey-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+@media (max-width: 640px) {
+  .survey-sdk-container { padding: 16px; border-radius: 0; box-shadow: none; }
+  .survey-sdk-question-card { padding: 16px; }
+  .survey-sdk-title { font-size: 18px; }
+  .survey-sdk-rating-btn { min-width: 44px; height: 44px; font-size: 14px; }
 }
 `;
 
@@ -348,11 +475,17 @@ export class DOMRenderer implements SurveyRenderer {
   private stylesInjected: boolean = false;
   private currentError: string | null = null;
   private submitting: boolean = false;
+  private highlightQuestionId: string | null = null;
+  private invalidQuestionIds: string[] = [];
+  private displayMode: DisplayMode = 'single';
   private renderConfig: RenderConfig = {};
 
   constructor(renderConfig?: RenderConfig) {
     if (renderConfig) {
       this.renderConfig = renderConfig;
+      if (renderConfig.displayMode) {
+        this.displayMode = renderConfig.displayMode;
+      }
     }
   }
 
@@ -362,6 +495,22 @@ export class DOMRenderer implements SurveyRenderer {
 
   setSubmitting(value: boolean): void {
     this.submitting = value;
+  }
+
+  setHighlightQuestionId(id: string | null): void {
+    this.highlightQuestionId = id;
+  }
+
+  setInvalidQuestionIds(ids: string[]): void {
+    this.invalidQuestionIds = ids;
+  }
+
+  setDisplayMode(mode: DisplayMode): void {
+    this.displayMode = mode;
+  }
+
+  getDisplayMode(): DisplayMode {
+    return this.displayMode;
   }
 
   mount(container: HTMLElement): void {
@@ -382,6 +531,16 @@ export class DOMRenderer implements SurveyRenderer {
   ): void {
     if (!this.container) return;
 
+    if (context.displayMode) {
+      this.displayMode = context.displayMode;
+    }
+    if (context.invalidQuestionIds) {
+      this.invalidQuestionIds = context.invalidQuestionIds;
+    }
+    if (context.highlightQuestionId) {
+      this.highlightQuestionId = context.highlightQuestionId;
+    }
+
     if (context.status === 'submitted') {
       this.renderSuccessPage(context, handlers);
       return;
@@ -395,29 +554,56 @@ export class DOMRenderer implements SurveyRenderer {
     const html: string[] = [];
     html.push('<div class="survey-sdk-container">');
 
-    html.push(this.renderHeader(context));
+    html.push(this.renderHeader(context, buttonTexts));
 
     if (context.showProgress) {
       html.push(this.renderProgress(context));
     }
 
-    const currentQuestion = context.questions[context.currentQuestionIndex];
-    if (currentQuestion) {
-      html.push(this.renderQuestionCard(currentQuestion, context));
+    if (this.displayMode === 'all' && this.invalidQuestionIds.length > 0) {
+      html.push(this.renderInvalidList(context, this.invalidQuestionIds));
+    }
+
+    if (this.displayMode === 'single') {
+      const currentQuestion = context.questions[context.currentQuestionIndex];
+      if (currentQuestion) {
+        html.push(
+          this.renderQuestionCard(currentQuestion, context, -1, false)
+        );
+      }
+    } else {
+      for (let i = 0; i < context.questions.length; i++) {
+        const q = context.questions[i];
+        const isInvalid = this.invalidQuestionIds.includes(q.id);
+        html.push(this.renderQuestionCard(q, context, i, isInvalid));
+      }
     }
 
     if (this.currentError) {
-      html.push(`<div class="survey-sdk-error">${this.escapeHtml(
-        this.currentError
-      )}</div>`);
+      html.push(
+        `<div class="survey-sdk-error">${this.escapeHtml(this.currentError)}</div>`
+      );
     }
 
-    html.push(this.renderActions(context, buttonTexts, handlers));
+    html.push(
+      this.renderActions(context, buttonTexts, handlers)
+    );
 
     html.push('</div>');
 
     this.container.innerHTML = html.join('');
     this.bindEvents(context, handlers);
+    this.scrollToHighlightIfNeeded();
+  }
+
+  private scrollToHighlightIfNeeded(): void {
+    if (!this.container || !this.highlightQuestionId) return;
+    const el = this.container.querySelector(
+      `[data-question-id="${this.highlightQuestionId}"]`
+    ) as HTMLElement | null;
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   }
 
   private injectStyles(): void {
@@ -433,13 +619,29 @@ export class DOMRenderer implements SurveyRenderer {
     this.stylesInjected = true;
   }
 
-  private renderHeader(context: RenderContext): string {
+  private renderHeader(
+    context: RenderContext,
+    buttonTexts: Record<string, string>
+  ): string {
+    const isAll = this.displayMode === 'all';
     return `
       <div class="survey-sdk-header">
-        <h2 class="survey-sdk-title">${this.escapeHtml(context.survey.meta.title)}</h2>
-        ${context.survey.meta.description
-          ? `<p class="survey-sdk-description">${this.escapeHtml(context.survey.meta.description)}</p>`
-          : ''}
+        <div class="survey-sdk-header-info">
+          <h2 class="survey-sdk-title">${this.escapeHtml(context.survey.meta.title)}</h2>
+          ${
+            context.survey.meta.description
+              ? `<p class="survey-sdk-description">${this.escapeHtml(context.survey.meta.description)}</p>`
+              : ''
+          }
+        </div>
+        <div class="survey-sdk-mode-switch" role="tablist" aria-label="显示模式">
+          <button type="button" class="survey-sdk-mode-btn ${!isAll ? 'active' : ''}" data-mode="single" title="一题一页">
+            📄 单页
+          </button>
+          <button type="button" class="survey-sdk-mode-btn ${isAll ? 'active' : ''}" data-mode="all" title="整页展开">
+            📋 整页
+          </button>
+        </div>
       </div>
     `;
   }
@@ -447,12 +649,20 @@ export class DOMRenderer implements SurveyRenderer {
   private renderProgress(context: RenderContext): string {
     const rate = context.completionRate;
     const percent = Math.round(rate.rate * 100);
-    const currentDisplay = context.currentQuestionIndex + 1;
-    const total = context.totalQuestions;
+    const currentDisplay =
+      this.displayMode === 'single'
+        ? `${context.currentQuestionIndex + 1}/${context.totalQuestions}`
+        : `${rate.answeredQuestions}/${rate.totalQuestions}`;
+
+    const requiredHint =
+      rate.requiredTotal > 0
+        ? `必答 ${rate.requiredAnswered}/${rate.requiredTotal}`
+        : '';
 
     return `
       <div class="survey-sdk-progress-text">
-        进度：${currentDisplay}/${total} 题 &middot; 完成度 ${percent}%
+        <span>进度：${currentDisplay} 题 ${requiredHint ? `&middot; ${requiredHint}` : ''}</span>
+        <span>完成度 ${percent}%</span>
       </div>
       <div class="survey-sdk-progress-bar">
         <div class="survey-sdk-progress-fill" style="width: ${percent}%"></div>
@@ -460,18 +670,83 @@ export class DOMRenderer implements SurveyRenderer {
     `;
   }
 
+  private renderInvalidList(
+    context: RenderContext,
+    invalidIds: string[]
+  ): string {
+    const links = invalidIds
+      .map((id) => {
+        const idx = context.questions.findIndex((q) => q.id === id);
+        const q = context.questions[idx];
+        if (!q) return '';
+        return `<button type="button" class="survey-sdk-invalid-link" data-jump-question="${this.escapeAttr(id)}">
+          第 ${idx + 1} 题 · ${this.escapeHtml(q.title.slice(0, 20))}${q.title.length > 20 ? '…' : ''}
+        </button>`;
+      })
+      .join('');
+
+    return `
+      <div class="survey-sdk-invalid-list">
+        <p class="survey-sdk-invalid-title">⚠ 还有 ${invalidIds.length} 道必填题未完成，点击快速定位：</p>
+        <div class="survey-sdk-invalid-links">${links}</div>
+      </div>
+    `;
+  }
+
+  private getQuestionTypeLabel(q: Question): string {
+    switch (q.type) {
+      case 'single': return '单选';
+      case 'multiple': return '多选';
+      case 'rating': return '打分';
+      case 'text': return q.multiline ? '多行文本' : '文本';
+    }
+  }
+
+  private hasAnswered(question: Question, context: RenderContext): boolean {
+    const a = context.answers[question.id];
+    if (!a || a.value === null || a.value === undefined) return false;
+    if (Array.isArray(a.value)) return a.value.length > 0;
+    if (typeof a.value === 'string') return a.value.trim().length > 0;
+    return true;
+  }
+
   private renderQuestionCard(
     question: Question,
-    context: RenderContext
+    context: RenderContext,
+    visibleIndex: number,
+    isInvalid: boolean
   ): string {
-    const html: string[] = [];
-    html.push('<div class="survey-sdk-question-card">');
+    const index =
+      visibleIndex >= 0 ? visibleIndex : context.currentQuestionIndex;
+    const answered = this.hasAnswered(question, context);
+    const highlighted = this.highlightQuestionId === question.id;
+    const classes = ['survey-sdk-question-card'];
+    if (answered) classes.push('answered');
+    if (isInvalid) classes.push('invalid');
+    if (highlighted) classes.push('highlight');
 
+    const typeLabel = this.getQuestionTypeLabel(question);
+
+    let statusHtml = '';
+    if (answered) {
+      statusHtml = `<span class="survey-sdk-question-status answered">已答 ✓</span>`;
+    } else if (question.required) {
+      statusHtml = `<span class="survey-sdk-question-status required">必填</span>`;
+    }
+
+    const html: string[] = [];
+    html.push(
+      `<div class="${classes.join(' ')}" data-question-id="${this.escapeAttr(question.id)}">`
+    );
+    html.push('<div class="survey-sdk-question-header">');
     if (context.showQuestionIndex) {
       html.push(
-        `<span class="survey-sdk-question-index">第 ${context.currentQuestionIndex + 1} 题</span>`
+        `<span class="survey-sdk-question-index">第 ${index + 1} 题</span>`
       );
     }
+    html.push(`<span class="survey-sdk-question-type">${typeLabel}</span>`);
+    html.push(statusHtml);
+    html.push('</div>');
 
     html.push(
       `<h3 class="survey-sdk-question-title">${this.escapeHtml(question.title)}${question.required
@@ -492,7 +767,10 @@ export class DOMRenderer implements SurveyRenderer {
     return html.join('');
   }
 
-  private renderQuestionBody(question: Question, answer: Answer | undefined): string {
+  private renderQuestionBody(
+    question: Question,
+    answer: Answer | undefined
+  ): string {
     switch (question.type) {
       case 'single':
         return this.renderSingleChoice(question, answer);
@@ -518,14 +796,13 @@ export class DOMRenderer implements SurveyRenderer {
           selectedValue !== null &&
           String(selectedValue) === val;
         return `
-          <label class="survey-sdk-option ${isSelected ? 'selected' : ''}" data-single-option data-value="${this.escapeAttr(val)}">
+          <label class="survey-sdk-option ${isSelected ? 'selected' : ''}" data-single-option data-qid="${this.escapeAttr(question.id)}" data-value="${this.escapeAttr(val)}">
             <input type="radio" name="q_${question.id}" value="${this.escapeAttr(val)}" ${isSelected ? 'checked' : ''} />
             <span class="survey-sdk-option-label">${this.escapeHtml(opt.label)}</span>
           </label>
         `;
       })
       .join('');
-
     return `<div class="survey-sdk-options">${optionsHtml}</div>`;
   }
 
@@ -544,6 +821,7 @@ export class DOMRenderer implements SurveyRenderer {
             ${question.minSelect ? `最少选 ${question.minSelect} 项` : ''}
             ${question.minSelect && question.maxSelect ? '，' : ''}
             ${question.maxSelect ? `最多选 ${question.maxSelect} 项` : ''}
+            <span style="color:#6b7280;">· 已选 ${selectedStr.length} 项</span>
            </p>`
         : '';
 
@@ -552,7 +830,7 @@ export class DOMRenderer implements SurveyRenderer {
         const val = String(opt.value);
         const isSelected = selectedStr.includes(val);
         return `
-          <label class="survey-sdk-option ${isSelected ? 'selected' : ''}" data-multi-option data-value="${this.escapeAttr(val)}">
+          <label class="survey-sdk-option ${isSelected ? 'selected' : ''}" data-multi-option data-qid="${this.escapeAttr(question.id)}" data-value="${this.escapeAttr(val)}">
             <input type="checkbox" name="q_${question.id}" value="${this.escapeAttr(val)}" ${isSelected ? 'checked' : ''} />
             <span class="survey-sdk-option-label">${this.escapeHtml(opt.label)}</span>
           </label>
@@ -582,15 +860,20 @@ export class DOMRenderer implements SurveyRenderer {
       const isSelected = selectedValue === val;
       const label = labelMap.get(val);
       buttons.push(`
-        <button type="button" class="survey-sdk-rating-btn ${isSelected ? 'selected' : ''}" 
-                data-rating data-value="${val}">
+        <button type="button" class="survey-sdk-rating-btn ${isSelected ? 'selected' : ''}"
+                data-rating data-qid="${this.escapeAttr(question.id)}" data-value="${val}">
           <span>${val}</span>
           ${label ? `<span class="survey-sdk-rating-label">${this.escapeHtml(label)}</span>` : ''}
         </button>
       `);
     }
 
-    return `<div class="survey-sdk-rating-group">${buttons.join('')}</div>`;
+    const currentHint =
+      selectedValue !== null
+        ? `<p class="survey-sdk-question-desc" style="margin-top:10px; color:#3b82f6;">当前选择：${selectedValue} 分${labelMap.has(selectedValue) ? `（${labelMap.get(selectedValue)}）` : ''}</p>`
+        : '';
+
+    return `<div class="survey-sdk-rating-group">${buttons.join('')}</div>${currentHint}`;
   }
 
   private renderText(
@@ -603,19 +886,19 @@ export class DOMRenderer implements SurveyRenderer {
         : '';
     const multiline = question.multiline ? 'multiline' : '';
     const textareaOrInput = question.multiline
-      ? `<textarea class="survey-sdk-text-input ${multiline}" 
-                   name="q_${question.id}" 
+      ? `<textarea class="survey-sdk-text-input ${multiline}"
+                   name="q_${question.id}"
                    placeholder="${this.escapeAttr(question.placeholder || '')}"
-                   data-text-input
+                   data-text-input data-qid="${this.escapeAttr(question.id)}"
                    ${question.maxLength ? `maxlength="${question.maxLength}"` : ''}
                    ${question.minLength ? `minlength="${question.minLength}"` : ''}
       >${this.escapeHtml(value)}</textarea>`
-      : `<input type="text" 
-                class="survey-sdk-text-input" 
-                name="q_${question.id}" 
+      : `<input type="text"
+                class="survey-sdk-text-input"
+                name="q_${question.id}"
                 value="${this.escapeAttr(value)}"
                 placeholder="${this.escapeAttr(question.placeholder || '')}"
-                data-text-input
+                data-text-input data-qid="${this.escapeAttr(question.id)}"
                 ${question.maxLength ? `maxlength="${question.maxLength}"` : ''}
                 ${question.minLength ? `minlength="${question.minLength}"` : ''}
       />`;
@@ -632,29 +915,40 @@ export class DOMRenderer implements SurveyRenderer {
     buttonTexts: Record<string, string>,
     _handlers: RendererEventHandlers
   ): string {
+    const isAll = this.displayMode === 'all';
     const isFirst = context.isFirstQuestion;
     const isLast = context.isLastQuestion;
     const canSubmit = context.status !== 'submitted';
+
+    const prevBtn = !isAll
+      ? `<button type="button" class="survey-sdk-btn survey-sdk-btn-secondary" data-action="prev" ${isFirst ? 'disabled' : ''}>
+           ${this.escapeHtml(buttonTexts.prev || '上一题')}
+         </button>`
+      : '';
+
+    const nextBtn = !isAll && !isLast
+      ? `<button type="button" class="survey-sdk-btn survey-sdk-btn-primary" data-action="next">
+           ${this.escapeHtml(buttonTexts.next || '下一题')}
+         </button>`
+      : '';
+
+    const submitBtn = isAll || isLast
+      ? `<button type="button" class="survey-sdk-btn survey-sdk-btn-success" data-action="submit" ${!canSubmit || this.submitting ? 'disabled' : ''}>
+           ${this.submitting ? '<span class="survey-sdk-loading"></span>' : ''}${this.escapeHtml(buttonTexts.submit || '提交问卷')}
+         </button>`
+      : '';
 
     return `
       <div class="survey-sdk-actions">
         <div class="survey-sdk-actions-left">
           <button type="button" class="survey-sdk-btn survey-sdk-btn-secondary" data-action="save-draft" ${context.status === 'submitted' ? 'disabled' : ''}>
-            ${this.escapeHtml(buttonTexts.saveDraft || '保存草稿')}
+            💾 ${this.escapeHtml(buttonTexts.saveDraft || '保存草稿')}
           </button>
         </div>
         <div class="survey-sdk-actions-right">
-          <button type="button" class="survey-sdk-btn survey-sdk-btn-secondary" data-action="prev" ${isFirst ? 'disabled' : ''}>
-            ${this.escapeHtml(buttonTexts.prev || '上一题')}
-          </button>
-          ${isLast
-            ? `<button type="button" class="survey-sdk-btn survey-sdk-btn-success" data-action="submit" ${!canSubmit || this.submitting ? 'disabled' : ''}>
-                 ${this.submitting ? '<span class="survey-sdk-loading"></span>' : ''}${this.escapeHtml(buttonTexts.submit || '提交问卷')}
-               </button>`
-            : `<button type="button" class="survey-sdk-btn survey-sdk-btn-primary" data-action="next">
-                 ${this.escapeHtml(buttonTexts.next || '下一题')}
-               </button>`
-          }
+          ${prevBtn}
+          ${nextBtn}
+          ${submitBtn}
         </div>
       </div>
     `;
@@ -666,7 +960,7 @@ export class DOMRenderer implements SurveyRenderer {
   ): void {
     if (!this.container) return;
 
-    const summary = StatisticsCalculator.generateResultSummary(
+    const summary = StatisticsCalculator.generateRichResultSummary(
       context.survey,
       context.questions,
       context.answers
@@ -677,16 +971,57 @@ export class DOMRenderer implements SurveyRenderer {
       ...context.buttonTexts,
     };
 
-    const summaryRows: string[] = [
-      `<div class="survey-sdk-summary-row"><span class="survey-sdk-summary-label">总题数</span><span class="survey-sdk-summary-value">${summary.totalQuestions} 题</span></div>`,
-      `<div class="survey-sdk-summary-row"><span class="survey-sdk-summary-label">已答</span><span class="survey-sdk-summary-value">${summary.answeredQuestions} 题</span></div>`,
-      `<div class="survey-sdk-summary-row"><span class="survey-sdk-summary-label">完成率</span><span class="survey-sdk-summary-value">${Math.round(summary.completionRate * 100)}%</span></div>`,
-    ];
+    const cards: string[] = [];
+    cards.push(`
+      <div class="survey-sdk-summary-row">
+        <span class="survey-sdk-summary-label">总题数</span>
+        <span class="survey-sdk-summary-value">${summary.totalQuestions} 题</span>
+      </div>
+      <div class="survey-sdk-summary-row">
+        <span class="survey-sdk-summary-label">已答</span>
+        <span class="survey-sdk-summary-value">${summary.answeredQuestions} 题</span>
+      </div>
+      <div class="survey-sdk-summary-row">
+        <span class="survey-sdk-summary-label">必填完成</span>
+        <span class="survey-sdk-summary-value">${summary.requiredAnswered}/${summary.requiredTotal}</span>
+      </div>
+      <div class="survey-sdk-summary-row">
+        <span class="survey-sdk-summary-label">完成率</span>
+        <span class="survey-sdk-summary-value">${Math.round(summary.completionRate * 100)}%</span>
+      </div>
+    `);
 
-    if (summary.averageScore !== undefined) {
-      summaryRows.push(
-        `<div class="survey-sdk-summary-row"><span class="survey-sdk-summary-label">平均得分</span><span class="survey-sdk-summary-value">${summary.averageScore.toFixed(1)} / ${(summary.maxScore! / (summary.totalScore ? summary.totalScore / summary.averageScore : 1)).toFixed(0)}</span></div>`
-      );
+    if (summary.averageScore !== undefined && summary.maxScore) {
+      const displayMax =
+        summary.ratingOverview.totalRatingQuestions > 0
+          ? Math.round(
+              summary.maxScore / summary.ratingOverview.totalRatingQuestions
+            )
+          : summary.maxScore;
+      cards.push(`
+        <div class="survey-sdk-summary-row">
+          <span class="survey-sdk-summary-label">平均得分</span>
+          <span class="survey-sdk-summary-value">${summary.averageScore.toFixed(1)} 分</span>
+        </div>
+      `);
+    }
+
+    cards.push(`
+      <div class="survey-sdk-summary-row">
+        <span class="survey-sdk-summary-label">题目分布</span>
+        <span class="survey-sdk-summary-value">
+          单选${summary.questionCountByType.single} · 多选${summary.questionCountByType.multiple} · 打分${summary.questionCountByType.rating} · 文本${summary.questionCountByType.text}
+        </span>
+      </div>
+    `);
+
+    if (summary.durationSeconds) {
+      cards.push(`
+        <div class="survey-sdk-summary-row">
+          <span class="survey-sdk-summary-label">答题时长</span>
+          <span class="survey-sdk-summary-value">${summary.durationSeconds} 秒</span>
+        </div>
+      `);
     }
 
     const highlights: string[] = [];
@@ -701,16 +1036,45 @@ export class DOMRenderer implements SurveyRenderer {
       );
     }
 
+    const ratingOverviewHtml =
+      summary.ratingOverview.totalRatingQuestions > 0
+        ? `
+      <div class="survey-sdk-summary-row">
+        <span class="survey-sdk-summary-label">打分题数量</span>
+        <span class="survey-sdk-summary-value">${summary.ratingOverview.totalRatingQuestions}</span>
+      </div>
+      <div class="survey-sdk-summary-row">
+        <span class="survey-sdk-summary-label">加权平均分</span>
+        <span class="survey-sdk-summary-value">${summary.ratingOverview.weightedAverage.toFixed(2)}</span>
+      </div>
+      ${
+        summary.ratingOverview.netPromoterScore !== undefined
+          ? `<div class="survey-sdk-summary-row">
+               <span class="survey-sdk-summary-label">NPS 净推荐值</span>
+               <span class="survey-sdk-summary-value">${summary.ratingOverview.netPromoterScore}</span>
+             </div>`
+          : ''
+      }`
+        : '';
+
     this.container.innerHTML = `
       <div class="survey-sdk-container">
         <div class="survey-sdk-success-page">
           <div class="survey-sdk-success-icon">✓</div>
           <h2 class="survey-sdk-success-title">问卷提交成功！</h2>
-          <p class="survey-sdk-success-msg">感谢您的宝贵反馈，您的意见对我们非常重要。</p>
-          
+          <p class="survey-sdk-success-msg">感谢您的宝贵反馈，您的意见对我们非常重要。提交ID已生成，可在业务系统查看详情。</p>
+
           <div class="survey-sdk-summary-card">
-            ${summaryRows.join('')}
+            <div class="survey-sdk-summary-grid">
+              ${cards.join('')}
+              ${ratingOverviewHtml}
+            </div>
             ${highlights.length > 0 ? `<div style="margin-top:12px;">${highlights.join('')}</div>` : ''}
+            ${
+              summary.optionDistributions.length > 0
+                ? `<p class="survey-sdk-question-desc" style="margin-top:14px; text-align:center;">📊 已生成完整统计（选项分布 ${summary.optionDistributions.length} 项 · 文本汇总 ${summary.textSummaries.length} 项），业务页面可直接读取</p>`
+                : ''
+            }
           </div>
 
           <button type="button" class="survey-sdk-btn survey-sdk-btn-primary" data-action="restart">
@@ -730,88 +1094,117 @@ export class DOMRenderer implements SurveyRenderer {
     context: RenderContext,
     handlers: RendererEventHandlers
   ): void {
-    if (!this.container) return;
+    const container = this.container;
+    if (!container) return;
 
-    const question = context.questions[context.currentQuestionIndex];
-    if (!question) return;
-
-    const singleOptions = this.container.querySelectorAll(
-      '[data-single-option]'
-    );
-    singleOptions.forEach((el) => {
-      el.addEventListener('click', (e) => {
-        const target = e.currentTarget as HTMLElement;
-        const value = target.getAttribute('data-value')!;
-        handlers.onAnswer(question.id, value);
-      });
-    });
-
-    const multiOptions = this.container.querySelectorAll(
-      '[data-multi-option]'
-    );
-    multiOptions.forEach((el) => {
-      el.addEventListener('click', (e) => {
-        e.preventDefault();
-        const target = e.currentTarget as HTMLElement;
-        const value = target.getAttribute('data-value')!;
-        const input = target.querySelector('input') as HTMLInputElement;
-        const isChecked = input.checked;
-
-        const current = context.answers[question.id]?.value;
-        const currentArr: (string | number)[] = Array.isArray(current)
-          ? [...current]
-          : [];
-
-        if (isChecked) {
-          const idx = currentArr.findIndex((v) => String(v) === value);
-          if (idx > -1) currentArr.splice(idx, 1);
-        } else {
-          if (!currentArr.some((v) => String(v) === value)) {
-            currentArr.push(value);
-          }
+    const modeBtns = container.querySelectorAll('[data-mode]');
+    modeBtns.forEach((el) => {
+      el.addEventListener('click', () => {
+        const mode = (el as HTMLElement).getAttribute('data-mode') as DisplayMode;
+        if (handlers.onToggleMode && mode) {
+          handlers.onToggleMode();
         }
-
-        handlers.onAnswer(question.id, currentArr);
       });
     });
 
-    const ratingBtns = this.container.querySelectorAll('[data-rating]');
-    ratingBtns.forEach((el) => {
-      el.addEventListener('click', (e) => {
-        const target = e.currentTarget as HTMLElement;
-        const value = Number(target.getAttribute('data-value'));
-        handlers.onAnswer(question.id, value);
+    const jumpBtns = container.querySelectorAll('[data-jump-question]');
+    jumpBtns.forEach((el) => {
+      el.addEventListener('click', () => {
+        const qid = (el as HTMLElement).getAttribute('data-jump-question');
+        if (qid && handlers.onJumpToQuestion) {
+          handlers.onJumpToQuestion(qid);
+        }
       });
     });
 
-    const textInput = this.container.querySelector(
-      '[data-text-input]'
-    ) as HTMLInputElement | HTMLTextAreaElement | null;
-    if (textInput) {
-      const handler = (e: Event) => {
-        const target = e.target as HTMLInputElement | HTMLTextAreaElement;
-        handlers.onAnswer(question.id, target.value);
-      };
-      textInput.addEventListener('input', handler);
-      textInput.addEventListener('change', handler);
+    const bindPerQuestion = (qid: string) => {
+      const q = context.questions.find((x) => x.id === qid);
+      if (!q) return;
+
+      const singleOptions = container.querySelectorAll(
+        `[data-single-option][data-qid="${qid}"]`
+      );
+      singleOptions.forEach((el) => {
+        el.addEventListener('click', (e) => {
+          const target = e.currentTarget as HTMLElement;
+          const value = target.getAttribute('data-value')!;
+          handlers.onAnswer(qid, value);
+        });
+      });
+
+      const multiOptions = container.querySelectorAll(
+        `[data-multi-option][data-qid="${qid}"]`
+      );
+      multiOptions.forEach((el) => {
+        el.addEventListener('click', (e) => {
+          e.preventDefault();
+          const target = e.currentTarget as HTMLElement;
+          const value = target.getAttribute('data-value')!;
+          const input = target.querySelector('input') as HTMLInputElement;
+          const isChecked = input.checked;
+
+          const current = context.answers[qid]?.value;
+          const currentArr: (string | number)[] = Array.isArray(current)
+            ? [...current]
+            : [];
+
+          if (isChecked) {
+            const idx = currentArr.findIndex((v) => String(v) === value);
+            if (idx > -1) currentArr.splice(idx, 1);
+          } else {
+            if (!currentArr.some((v) => String(v) === value)) {
+              currentArr.push(value);
+            }
+          }
+
+          handlers.onAnswer(qid, currentArr);
+        });
+      });
+
+      const ratingBtns = container.querySelectorAll(
+        `[data-rating][data-qid="${qid}"]`
+      );
+      ratingBtns.forEach((el) => {
+        el.addEventListener('click', () => {
+          const target = el as HTMLElement;
+          const value = Number(target.getAttribute('data-value'));
+          handlers.onAnswer(qid, value);
+        });
+      });
+
+      const textInput = container.querySelector(
+        `[data-text-input][data-qid="${qid}"]`
+      ) as HTMLInputElement | HTMLTextAreaElement | null;
+      if (textInput) {
+        const changeHandler = (e: Event) => {
+          const target = e.target as HTMLInputElement | HTMLTextAreaElement;
+          handlers.onAnswer(qid, target.value);
+        };
+        textInput.addEventListener('input', changeHandler);
+        textInput.addEventListener('change', changeHandler);
+      }
+    };
+
+    if (this.displayMode === 'single') {
+      const q = context.questions[context.currentQuestionIndex];
+      if (q) bindPerQuestion(q.id);
+    } else {
+      for (const q of context.questions) bindPerQuestion(q.id);
     }
 
-    const prevBtn = this.container.querySelector('[data-action="prev"]');
+    const prevBtn = container.querySelector('[data-action="prev"]');
     if (prevBtn) {
       prevBtn.addEventListener('click', () => handlers.onPrev());
     }
-
-    const nextBtn = this.container.querySelector('[data-action="next"]');
+    const nextBtn = container.querySelector('[data-action="next"]');
     if (nextBtn) {
       nextBtn.addEventListener('click', () => handlers.onNext());
     }
-
-    const submitBtn = this.container.querySelector('[data-action="submit"]');
+    const submitBtn = container.querySelector('[data-action="submit"]');
     if (submitBtn) {
       submitBtn.addEventListener('click', () => handlers.onSubmit());
     }
-
-    const saveDraftBtn = this.container.querySelector(
+    const saveDraftBtn = container.querySelector(
       '[data-action="save-draft"]'
     );
     if (saveDraftBtn) {

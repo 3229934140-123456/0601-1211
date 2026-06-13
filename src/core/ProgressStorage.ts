@@ -7,7 +7,7 @@ export class ProgressStorage {
     this.prefix = prefix;
   }
 
-  private getStorageKey(surveyId: string, user: UserContext | null): string {
+  getStorageKey(surveyId: string, user: UserContext | null): string {
     const userId = user ? String(user.userId) : 'anonymous';
     return `${this.prefix}:${surveyId}:${userId}`;
   }
@@ -25,6 +25,33 @@ export class ProgressStorage {
     }
   }
 
+  saveAndReturnMeta(progress: SurveyProgress): {
+    success: boolean;
+    key: string;
+    answeredCount: number;
+    totalCount: number;
+    completionRate: number;
+    status: SurveyProgress['status'];
+    savedAt: number;
+  } {
+    const success = this.save(progress);
+    const key = this.getStorageKey(progress.surveyId, progress.user);
+    const answeredCount = progress.answeredCount ?? Object.keys(progress.answers).length;
+    const totalCount = progress.totalCount ?? progress.completionRate?.totalQuestions ?? 0;
+    const completionRate =
+      progress.completionRate?.rate ??
+      (totalCount > 0 ? answeredCount / totalCount : 0);
+    return {
+      success,
+      key,
+      answeredCount,
+      totalCount,
+      completionRate,
+      status: progress.status,
+      savedAt: progress.lastSavedAt || Date.now(),
+    };
+  }
+
   load(
     surveyId: string,
     user: UserContext | null
@@ -39,6 +66,26 @@ export class ProgressStorage {
       console.error('[ProgressStorage] Load failed:', e);
       return null;
     }
+  }
+
+  loadAndReturnMeta(surveyId: string, user: UserContext | null) {
+    const progress = this.load(surveyId, user);
+    const key = this.getStorageKey(surveyId, user);
+    if (!progress) return { progress: null as SurveyProgress | null, key, answeredCount: 0, totalCount: 0, completionRate: 0, status: 'not_started' as const, resumedFromIndex: 0 };
+    const answeredCount = progress.answeredCount ?? Object.keys(progress.answers).length;
+    const totalCount = progress.totalCount ?? progress.completionRate?.totalQuestions ?? 0;
+    const completionRate =
+      progress.completionRate?.rate ??
+      (totalCount > 0 ? answeredCount / totalCount : 0);
+    return {
+      progress,
+      key,
+      answeredCount,
+      totalCount,
+      completionRate,
+      status: progress.status,
+      resumedFromIndex: progress.currentQuestionIndex,
+    };
   }
 
   clear(surveyId: string, user: UserContext | null): boolean {

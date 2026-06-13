@@ -1,5 +1,7 @@
 export type QuestionType = 'single' | 'multiple' | 'rating' | 'text';
 
+export type DisplayMode = 'single' | 'all';
+
 export interface QuestionOption {
   id: string;
   label: string;
@@ -112,6 +114,7 @@ export interface SubmitResult {
   submissionId?: string;
   message?: string;
   timestamp?: number;
+  summary?: RichResultSummary;
 }
 
 export interface ButtonTexts {
@@ -120,6 +123,7 @@ export interface ButtonTexts {
   submit?: string;
   restart?: string;
   saveDraft?: string;
+  toggleMode?: string;
 }
 
 export interface RenderConfig {
@@ -128,6 +132,7 @@ export interface RenderConfig {
   buttonTexts?: ButtonTexts;
   theme?: 'light' | 'dark' | 'auto';
   customClass?: string;
+  displayMode?: DisplayMode;
 }
 
 export interface SDKConfig {
@@ -155,19 +160,79 @@ export interface SurveyProgress {
   startedAt: number;
   lastSavedAt?: number;
   status: SurveyStatus;
+  displayMode?: DisplayMode;
+  completionRate?: CompletionRate;
+  answeredCount?: number;
+  totalCount?: number;
 }
 
 export interface ValidationResult {
   valid: boolean;
   questionId?: string;
   errorMessage?: string;
+  invalidQuestionIds?: string[];
 }
 
 export interface CompletionRate {
   totalQuestions: number;
   answeredQuestions: number;
   skippedQuestions: number;
+  requiredTotal: number;
+  requiredAnswered: number;
   rate: number;
+}
+
+export interface OptionDistributionItem {
+  value: string;
+  label: string;
+  count: number;
+  percentage: number;
+  selected: boolean;
+}
+
+export interface OptionDistribution {
+  questionId: string;
+  questionTitle: string;
+  type: 'single' | 'multiple';
+  totalResponses: number;
+  items: OptionDistributionItem[];
+  otherCount?: number;
+}
+
+export interface TextSummaryItem {
+  value: string;
+  length: number;
+}
+
+export interface TextSummary {
+  questionId: string;
+  questionTitle: string;
+  totalResponses: number;
+  items: TextSummaryItem[];
+  totalLength: number;
+  averageLength: number;
+  keywords: string[];
+}
+
+export interface RatingOverviewItem {
+  questionId: string;
+  questionTitle: string;
+  minValue: number;
+  maxValue: number;
+  averageScore: number;
+  median: number;
+  distribution: Record<number, number>;
+  scoreBucket: 'poor' | 'fair' | 'good' | 'excellent';
+}
+
+export interface RatingOverview {
+  totalRatingQuestions: number;
+  averageScore: number;
+  totalScore: number;
+  maxScore: number;
+  weightedAverage: number;
+  items: RatingOverviewItem[];
+  netPromoterScore?: number;
 }
 
 export interface QuestionStatistics {
@@ -175,16 +240,24 @@ export interface QuestionStatistics {
   questionTitle: string;
   type: QuestionType;
   totalResponses: number;
+  required: boolean;
+  hasAnswer: boolean;
   optionCounts?: Record<string, number>;
+  optionDistribution?: OptionDistribution;
   averageScore?: number;
+  ratingDetail?: RatingOverviewItem;
   textResponses?: string[];
+  textSummary?: TextSummary;
 }
 
 export interface ResultSummary {
   surveyId: string;
   surveyTitle: string;
+  surveyVersion?: string;
   totalQuestions: number;
   answeredQuestions: number;
+  requiredTotal: number;
+  requiredAnswered: number;
   completionRate: number;
   averageScore?: number;
   totalScore?: number;
@@ -194,6 +267,23 @@ export interface ResultSummary {
     lowestRated?: { questionId: string; title: string; score: number };
   };
   submissionTime?: string;
+  durationSeconds?: number;
+}
+
+export interface RichResultSummary extends ResultSummary {
+  optionDistributions: OptionDistribution[];
+  textSummaries: TextSummary[];
+  ratingOverview: RatingOverview;
+  questionCountByType: {
+    single: number;
+    multiple: number;
+    rating: number;
+    text: number;
+  };
+  answeredIds: string[];
+  unansweredIds: string[];
+  invalidIds: string[];
+  userSnapshot?: UserContext;
 }
 
 export type SurveyEventName =
@@ -207,24 +297,49 @@ export type SurveyEventName =
   | 'submitSuccess'
   | 'submitError'
   | 'complete'
-  | 'restart';
+  | 'restart'
+  | 'displayModeChange';
 
 export interface SurveyEventMap {
   start: { surveyId: string; user: UserContext | null };
   questionAnswer: { questionId: string; value: AnswerValue; answers: AnswersMap };
   questionChange: { fromIndex: number; toIndex: number; questionId: string };
-  validateError: { questionId: string; errorMessage: string };
-  draftSaved: { progress: SurveyProgress };
-  draftLoaded: { progress: SurveyProgress };
+  validateError: {
+    questionId: string;
+    errorMessage: string;
+    invalidQuestionIds?: string[];
+  };
+  draftSaved: {
+    progress: SurveyProgress;
+    storageKey: string;
+    answeredCount: number;
+    totalCount: number;
+    completionRate: number;
+    status: SurveyStatus;
+  };
+  draftLoaded: {
+    progress: SurveyProgress;
+    storageKey: string;
+    answeredCount: number;
+    totalCount: number;
+    completionRate: number;
+    status: SurveyStatus;
+    resumedFromIndex: number;
+  };
   submit: { payload: SubmitPayload };
-  submitSuccess: { result: SubmitResult };
+  submitSuccess: { result: SubmitResult; summary: RichResultSummary };
   submitError: { error: Error };
   complete: {
     answers: AnswersMap;
-    summary: ResultSummary;
+    summary: RichResultSummary;
     result: SubmitResult;
+    statistics: QuestionStatistics[];
   };
   restart: { surveyId: string };
+  displayModeChange: {
+    from: DisplayMode;
+    to: DisplayMode;
+  };
 }
 
 export interface RendererEventHandlers {
@@ -234,6 +349,8 @@ export interface RendererEventHandlers {
   onSubmit: () => void;
   onSaveDraft: () => void;
   onRestart: () => void;
+  onToggleMode?: () => void;
+  onJumpToQuestion?: (questionId: string) => void;
 }
 
 export interface RenderContext {
@@ -249,6 +366,9 @@ export interface RenderContext {
   showProgress: boolean;
   showQuestionIndex: boolean;
   status: SurveyStatus;
+  displayMode: DisplayMode;
+  invalidQuestionIds?: string[];
+  highlightQuestionId?: string;
 }
 
 export interface SurveyRenderer {
@@ -257,4 +377,11 @@ export interface SurveyRenderer {
   unmount(): void;
   setError?(error: string | null): void;
   setSubmitting?(value: boolean): void;
+  setHighlightQuestionId?(id: string | null): void;
+  setInvalidQuestionIds?(ids: string[]): void;
+  setDisplayMode?(mode: DisplayMode): void;
+}
+
+export interface SubmitAdapter {
+  submit(payload: SubmitPayload): Promise<SubmitResult>;
 }

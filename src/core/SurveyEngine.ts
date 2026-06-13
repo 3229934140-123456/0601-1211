@@ -8,6 +8,7 @@ import type {
   SurveyStatus,
   UserContext,
   ValidationResult,
+  DisplayMode,
 } from '../types';
 import { SkipLogicEvaluator } from './SkipLogicEvaluator';
 import { AnswerValidator } from './AnswerValidator';
@@ -21,6 +22,7 @@ export class SurveyEngine {
   private status: SurveyStatus = 'not_started';
   private user: UserContext | null = null;
   private startedAt: number = Date.now();
+  private displayMode: DisplayMode = 'single';
 
   private skipEvaluator: SkipLogicEvaluator;
   private validator: AnswerValidator;
@@ -32,6 +34,17 @@ export class SurveyEngine {
     this.visibleQuestions = [...this.questions];
     this.skipEvaluator = new SkipLogicEvaluator();
     this.validator = new AnswerValidator();
+  }
+
+  setDisplayMode(mode: DisplayMode): void {
+    if (this.displayMode !== mode) {
+      this.displayMode = mode;
+      this.notifyUpdate();
+    }
+  }
+
+  getDisplayMode(): DisplayMode {
+    return this.displayMode;
   }
 
   setUser(user: UserContext): void {
@@ -113,6 +126,10 @@ export class SurveyEngine {
     return true;
   }
 
+  getQuestionIndex(questionId: string): number {
+    return this.visibleQuestions.findIndex((q) => q.id === questionId);
+  }
+
   next(): boolean {
     const current = this.getCurrentQuestion();
     if (!current) return false;
@@ -190,7 +207,12 @@ export class SurveyEngine {
     );
   }
 
+  listInvalidQuestions(): string[] {
+    return this.validator.listInvalid(this.visibleQuestions, this.answers);
+  }
+
   getProgress(): SurveyProgress {
+    const rate = this.computeCompletionRate();
     return {
       surveyId: this.survey.meta.id,
       user: this.user,
@@ -199,6 +221,10 @@ export class SurveyEngine {
       startedAt: this.startedAt,
       lastSavedAt: Date.now(),
       status: this.status,
+      displayMode: this.displayMode,
+      completionRate: rate,
+      answeredCount: rate.answeredQuestions,
+      totalCount: rate.totalQuestions,
     };
   }
 
@@ -212,6 +238,9 @@ export class SurveyEngine {
     this.startedAt = progress.startedAt;
     this.status = progress.status;
     this.user = progress.user;
+    if (progress.displayMode) {
+      this.displayMode = progress.displayMode;
+    }
     this.reevaluateVisibleQuestions();
     this.notifyUpdate();
   }
@@ -235,6 +264,33 @@ export class SurveyEngine {
 
   getDuration(): number {
     return Date.now() - this.startedAt;
+  }
+
+  computeCompletionRate() {
+    let answered = 0;
+    let requiredTotal = 0;
+    let requiredAnswered = 0;
+    let skipped = 0;
+    const total = this.visibleQuestions.length;
+    for (const q of this.visibleQuestions) {
+      const a = this.answers[q.id];
+      const ok = this.hasAnswer(a);
+      if (q.required) requiredTotal++;
+      if (ok) {
+        answered++;
+        if (q.required) requiredAnswered++;
+      } else {
+        skipped++;
+      }
+    }
+    return {
+      totalQuestions: total,
+      answeredQuestions: answered,
+      skippedQuestions: skipped,
+      requiredTotal,
+      requiredAnswered,
+      rate: total > 0 ? answered / total : 0,
+    };
   }
 
   onUpdate(callback: () => void): () => void {
@@ -302,5 +358,12 @@ export class SurveyEngine {
       question.skipLogic,
       this.answers
     );
+  }
+
+  private hasAnswer(answer: Answer | undefined): boolean {
+    if (!answer || answer.value === null || answer.value === undefined) return false;
+    if (Array.isArray(answer.value)) return answer.value.length > 0;
+    if (typeof answer.value === 'string') return answer.value.trim().length > 0;
+    return true;
   }
 }

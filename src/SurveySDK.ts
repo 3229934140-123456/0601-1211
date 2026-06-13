@@ -7,9 +7,14 @@ import type {
   SurveyStatus,
   SubmitPayload,
   SubmitResult,
+  SubmitAdapter as SubmitAdapterType,
   CompletionRate,
   QuestionStatistics,
   ResultSummary,
+  RichResultSummary,
+  OptionDistribution,
+  TextSummary,
+  RatingOverview,
   SurveyRenderer,
   RenderConfig,
   ButtonTexts,
@@ -17,9 +22,8 @@ import type {
   SurveyEventName,
   SurveyEventMap,
   RenderContext,
+  DisplayMode,
 } from './types';
-
-import type { SubmitAdapter as SubmitAdapterType } from './core/SubmitAdapter';
 
 import { EventEmitter } from './core/EventEmitter';
 import { SurveyEngine } from './core/SurveyEngine';
@@ -40,11 +44,12 @@ const DEFAULT_CONFIG: Required<Pick<SDKConfig, 'autoSave' | 'autoSaveInterval' |
     startFromSavedProgress: true,
   };
 
-const DEFAULT_RENDER_CONFIG: Required<Pick<RenderConfig, 'showProgress' | 'showQuestionIndex' | 'theme'>> =
+const DEFAULT_RENDER_CONFIG: Required<Pick<RenderConfig, 'showProgress' | 'showQuestionIndex' | 'theme' | 'displayMode'>> =
   {
     showProgress: true,
     showQuestionIndex: true,
     theme: 'light',
+    displayMode: 'single',
   };
 
 type EventCallback<K extends SurveyEventName> = (
@@ -65,11 +70,15 @@ export class SurveySDK {
     showProgress: boolean;
     showQuestionIndex: boolean;
     theme: 'light' | 'dark' | 'auto';
+    displayMode: DisplayMode;
   };
   private logger: (msg: string, ...args: unknown[]) => void;
 
   private autoSaveTimer: ReturnType<typeof setInterval> | null = null;
   private lastSubmittedResult: SubmitResult | null = null;
+  private lastRichSummary: RichResultSummary | null = null;
+  private pendingInvalidQuestionIds: string[] = [];
+  private pendingHighlightId: string | null = null;
 
   constructor(survey: Survey, config?: SDKConfig) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -77,6 +86,7 @@ export class SurveySDK {
       ...DEFAULT_RENDER_CONFIG,
       ...(this.config.renderConfig || {}),
       buttonTexts: this.config.renderConfig?.buttonTexts || {},
+      displayMode: this.config.renderConfig?.displayMode || 'single',
     };
 
     this.emitter = new EventEmitter();
@@ -91,6 +101,8 @@ export class SurveySDK {
     this.engine.onUpdate(() => {
       this.renderIfMounted();
     });
+
+    this.engine.setDisplayMode(this.renderConfig.displayMode);
 
     if (this.config.startFromSavedProgress) {
       this.tryLoadDraft();
@@ -117,6 +129,26 @@ export class SurveySDK {
     this.renderIfMounted();
   }
 
+  setDisplayMode(mode: DisplayMode): void {
+    const prev = this.engine.getDisplayMode();
+    if (prev === mode) return;
+    this.engine.setDisplayMode(mode);
+    this.renderConfig.displayMode = mode;
+    this.emit('displayModeChange', { from: prev, to: mode });
+    this.logger(`显示模式切换: ${prev} -> ${mode}`);
+    this.renderIfMounted();
+  }
+
+  getDisplayMode(): DisplayMode {
+    return this.engine.getDisplayMode();
+  }
+
+  toggleDisplayMode(): DisplayMode {
+    const next: DisplayMode = this.engine.getDisplayMode() === 'single' ? 'all' : 'single';
+    this.setDisplayMode(next);
+    return next;
+  }
+
   mount(container: HTMLElement | string): void {
     const el =
       typeof container === 'string'
@@ -130,7 +162,9 @@ export class SurveySDK {
     this.container = el;
 
     if (!this.renderer) {
-      this.renderer = new DOMRenderer(this.renderConfig);
+      const domRenderer = new DOMRenderer(this.renderConfig);
+      domRenderer.setDisplayMode(this.renderConfig.displayMode);
+      this.renderer = domRenderer;
     }
 
     this.renderer.mount(el);
@@ -194,6 +228,7 @@ export class SurveySDK {
       });
     }
 
+    this.clearInvalidAndHighlight();
     this.renderIfMounted();
   }
 
@@ -218,6 +253,7 @@ export class SurveySDK {
         this.emit('validateError', {
           questionId: validation.questionId || current.id,
           errorMessage: validation.errorMessage || '校验失败',
+          invalidQuestionIds: validation.invalidQuestionIds,
         });
         this.showErrorToUser(validation.errorMessage);
         return false;
@@ -262,9 +298,34 @@ export class SurveySDK {
         toIndex: this.engine.getCurrentIndex(),
         questionId,
       });
+      this.setHighlightQuestionId(questionId);
     }
     this.renderIfMounted();
     return success;
+  }
+
+  jumpAndHighlight(questionId: string): boolean {
+    const ok = this.goToQuestion(questionId);
+    if (ok) {
+      this.setHighlightQuestionId(questionId);
+    }
+    return ok;
+  }
+
+  setHighlightQuestionId(questionId: string | null): void {
+    this.pendingHighlightId = questionId;
+    if (this.renderer && this.renderer instanceof DOMRenderer) {
+      this.renderer.setHighlightQuestionId(questionId);
+    }
+    if (questionId) {
+      setTimeout(() => {
+        this.pendingHighlightId = null;
+        if (this.renderer && this.renderer instanceof DOMRenderer) {
+          this.renderer.setHighlightQuestionId(null);
+        }
+        this.renderIfMounted();
+      }, 2500);
+    }
   }
 
   validateQuestion(questionId: string): ValidationResult {
@@ -272,31 +333,84 @@ export class SurveySDK {
   }
 
   validateAll(): ValidationResult {
-    return this.engine.validateAll();
+    const result = this.engine.validateAll();
+    if (!result.valid && result.invalidQuestionIds) {
+      this.pendingInvalidQuestionIds = result.invalidQuestionIds;
+      if (this.renderer && this.renderer instanceof DOMRenderer) {
+        this.renderer.setInvalidQuestionIds(result.invalidQuestionIds);
+      }
+    }
+    return result;
+  }
+
+  listInvalidQuestions(): string[] {
+    const ids = this.engine.listInvalidQuestions();
+    this.pendingInvalidQuestionIds = ids;
+    if (this.renderer && this.renderer instanceof DOMRenderer) {
+      this.renderer.setInvalidQuestionIds(ids);
+    }
+    return ids;
+  }
+
+  clearInvalidAndHighlight(): void {
+    this.pendingInvalidQuestionIds = [];
+    this.pendingHighlightId = null;
+    if (this.renderer && this.renderer instanceof DOMRenderer) {
+      this.renderer.setInvalidQuestionIds([]);
+      this.renderer.setHighlightQuestionId(null);
+    }
   }
 
   async saveDraft(): Promise<boolean> {
     const progress = this.engine.getProgress();
-    const success = this.storage.save(progress);
-    if (success) {
+    const meta = this.storage.saveAndReturnMeta(progress);
+    if (meta.success) {
       this.engine.setStatus('draft_saved');
-      this.emit('draftSaved', { progress });
-      this.logger('草稿保存成功');
+      this.emit('draftSaved', {
+        progress,
+        storageKey: meta.key,
+        answeredCount: meta.answeredCount,
+        totalCount: meta.totalCount,
+        completionRate: meta.completionRate,
+        status: meta.status,
+      });
+      this.logger(
+        `草稿保存成功 | ${meta.answeredCount}/${meta.totalCount}题 | ${Math.round(
+          meta.completionRate * 100
+        )}% | key=${meta.key}`
+      );
     } else {
       this.logger('草稿保存失败');
     }
     this.renderIfMounted();
-    return success;
+    return meta.success;
   }
 
   loadDraft(): boolean {
-    const survey = this.engine.getSurvey();
-    const user = this.engine.getUser();
-    const progress = this.storage.load(survey.meta.id, user);
-    if (progress) {
-      this.engine.loadProgress(progress);
-      this.emit('draftLoaded', { progress });
-      this.logger('草稿加载成功');
+    const meta = this.storage.loadAndReturnMeta(
+      this.engine.getSurvey().meta.id,
+      this.engine.getUser()
+    );
+    if (meta.progress) {
+      this.engine.loadProgress(meta.progress);
+
+      const mode = this.engine.getDisplayMode();
+      if (mode && this.renderer && this.renderer instanceof DOMRenderer) {
+        this.renderer.setDisplayMode(mode);
+      }
+
+      this.emit('draftLoaded', {
+        progress: meta.progress,
+        storageKey: meta.key,
+        answeredCount: meta.answeredCount,
+        totalCount: meta.totalCount,
+        completionRate: meta.completionRate,
+        status: meta.status,
+        resumedFromIndex: meta.resumedFromIndex,
+      });
+      this.logger(
+        `草稿加载成功 | 恢复到第${meta.resumedFromIndex + 1}题 | ${meta.answeredCount}/${meta.totalCount}题`
+      );
       this.renderIfMounted();
       return true;
     }
@@ -304,27 +418,43 @@ export class SurveySDK {
   }
 
   clearDraft(): boolean {
-    const survey = this.engine.getSurvey();
-    const user = this.engine.getUser();
-    return this.storage.clear(survey.meta.id, user);
+    const ok = this.storage.clear(
+      this.engine.getSurvey().meta.id,
+      this.engine.getUser()
+    );
+    if (ok) this.logger('草稿已清除');
+    return ok;
   }
 
   hasDraft(): boolean {
-    const survey = this.engine.getSurvey();
-    const user = this.engine.getUser();
-    return this.storage.exists(survey.meta.id, user);
+    return this.storage.exists(
+      this.engine.getSurvey().meta.id,
+      this.engine.getUser()
+    );
+  }
+
+  getDraftStorageKey(): string {
+    return this.storage.getStorageKey(
+      this.engine.getSurvey().meta.id,
+      this.engine.getUser()
+    );
   }
 
   async submit(): Promise<SubmitResult> {
-    const validation = this.engine.validateAll();
+    const validation = this.validateAll();
     if (!validation.valid) {
       this.emit('validateError', {
         questionId: validation.questionId || '',
-        errorMessage: validation.errorMessage || '存在未完成的必填项',
+        errorMessage:
+          validation.errorMessage ||
+          `存在 ${validation.invalidQuestionIds?.length || 1} 道必填题未完成`,
+        invalidQuestionIds: validation.invalidQuestionIds,
       });
-      this.showErrorToUser(validation.errorMessage);
+      this.showErrorToUser(
+        validation.errorMessage || '存在必填项未填写，请查看红色标记'
+      );
       if (validation.questionId) {
-        this.goToQuestion(validation.questionId);
+        this.jumpAndHighlight(validation.questionId);
       }
       throw new Error(validation.errorMessage || '校验失败');
     }
@@ -336,13 +466,14 @@ export class SurveySDK {
     }
 
     const survey = this.engine.getSurvey();
+    const durationMs = this.engine.getDuration();
     const payload: SubmitPayload = {
       surveyId: survey.meta.id,
       surveyVersion: survey.meta.version,
       user,
       answers: this.engine.getAnswers(),
       submittedAt: Date.now(),
-      duration: this.engine.getDuration(),
+      duration: durationMs,
     };
 
     this.emit('submit', { payload });
@@ -350,21 +481,46 @@ export class SurveySDK {
 
     try {
       const result = await this.submitAdapter.submit(payload);
-      this.lastSubmittedResult = result;
+
+      const richSummary = StatisticsCalculator.generateRichResultSummary(
+        survey,
+        this.engine.getQuestions(),
+        this.engine.getAnswers(),
+        user,
+        durationMs
+      );
+      this.lastRichSummary = richSummary;
+
+      const enrichedResult: SubmitResult = {
+        ...result,
+        summary: richSummary,
+      };
+      this.lastSubmittedResult = enrichedResult;
 
       if (result.success) {
         this.engine.setStatus('submitted');
         this.clearDraft();
         this.stopAutoSave();
+        this.clearInvalidAndHighlight();
 
-        const summary = this.getResultSummary();
-        this.emit('submitSuccess', { result });
+        const allStats = StatisticsCalculator.getAllStatistics(
+          survey,
+          this.engine.getQuestions(),
+          this.engine.getAnswers()
+        );
+
+        this.emit('submitSuccess', { result: enrichedResult, summary: richSummary });
         this.emit('complete', {
           answers: this.engine.getAnswers(),
-          summary,
-          result,
+          summary: richSummary,
+          result: enrichedResult,
+          statistics: allStats,
         });
-        this.logger('问卷提交成功', result);
+        this.logger(
+          `问卷提交成功 | submissionId=${result.submissionId} | 完成率=${Math.round(
+            richSummary.completionRate * 100
+          )}%`
+        );
       } else {
         this.engine.setStatus('error');
         this.emit('submitError', {
@@ -374,7 +530,7 @@ export class SurveySDK {
         this.logger('问卷提交失败', result);
       }
 
-      return result;
+      return enrichedResult;
     } catch (e) {
       const error = e as Error;
       this.engine.setStatus('error');
@@ -391,6 +547,9 @@ export class SurveySDK {
     this.engine.reset();
     this.clearDraft();
     this.lastSubmittedResult = null;
+    this.lastRichSummary = null;
+    this.clearInvalidAndHighlight();
+
     this.emit('restart', {
       surveyId: this.engine.getSurvey().meta.id,
     });
@@ -464,16 +623,54 @@ export class SurveySDK {
     );
   }
 
-  getResultSummary(): ResultSummary {
-    return StatisticsCalculator.generateResultSummary(
+  getOptionDistributions(): OptionDistribution[] {
+    return StatisticsCalculator.getOptionDistributions(
       this.engine.getSurvey(),
       this.engine.getQuestions(),
       this.engine.getAnswers()
     );
   }
 
+  getTextSummaries(): TextSummary[] {
+    return StatisticsCalculator.getTextSummaries(
+      this.engine.getSurvey(),
+      this.engine.getQuestions(),
+      this.engine.getAnswers()
+    );
+  }
+
+  getRatingOverview(): RatingOverview {
+    return StatisticsCalculator.getRatingOverview(
+      this.engine.getQuestions(),
+      this.engine.getAnswers()
+    );
+  }
+
+  getResultSummary(): ResultSummary {
+    return StatisticsCalculator.generateResultSummary(
+      this.engine.getSurvey(),
+      this.engine.getQuestions(),
+      this.engine.getAnswers(),
+      this.engine.getDuration()
+    );
+  }
+
+  getRichResultSummary(): RichResultSummary {
+    return StatisticsCalculator.generateRichResultSummary(
+      this.engine.getSurvey(),
+      this.engine.getQuestions(),
+      this.engine.getAnswers(),
+      this.engine.getUser(),
+      this.engine.getDuration()
+    );
+  }
+
   getLastSubmitResult(): SubmitResult | null {
     return this.lastSubmittedResult;
+  }
+
+  getLastRichSummary(): RichResultSummary | null {
+    return this.lastRichSummary;
   }
 
   on<K extends SurveyEventName>(
@@ -536,6 +733,7 @@ export class SurveySDK {
   private render(): void {
     if (!this.renderer || !this.container) return;
 
+    const completionRate = this.getCompletionRate();
     const context: RenderContext = {
       survey: this.engine.getSurvey(),
       questions: this.engine.getQuestions(),
@@ -544,11 +742,17 @@ export class SurveySDK {
       isFirstQuestion: this.engine.isFirstQuestion(),
       isLastQuestion: this.engine.isLastQuestion(),
       answers: this.engine.getAnswers(),
-      completionRate: this.getCompletionRate(),
+      completionRate,
       buttonTexts: this.renderConfig.buttonTexts,
       showProgress: this.renderConfig.showProgress,
       showQuestionIndex: this.renderConfig.showQuestionIndex,
       status: this.engine.getStatus(),
+      displayMode: this.engine.getDisplayMode(),
+      invalidQuestionIds:
+        this.pendingInvalidQuestionIds.length > 0
+          ? this.pendingInvalidQuestionIds
+          : undefined,
+      highlightQuestionId: this.pendingHighlightId || undefined,
     };
 
     this.renderer.render(context, {
@@ -558,21 +762,22 @@ export class SurveySDK {
       onSubmit: () => this.submit().catch(() => {}),
       onSaveDraft: () => this.saveDraft().catch(() => {}),
       onRestart: () => this.restart(),
+      onToggleMode: () => this.toggleDisplayMode(),
+      onJumpToQuestion: (qid) => this.jumpAndHighlight(qid),
     });
   }
 
   private showErrorToUser(message: string | undefined): void {
     if (!this.renderer || !this.container) return;
-    const renderer = this.renderer;
-    if (renderer instanceof DOMRenderer) {
-      renderer.setError(message || null);
+    if (this.renderer instanceof DOMRenderer) {
+      this.renderer.setError(message || null);
       this.render();
       setTimeout(() => {
-        if (renderer && renderer.setError) {
-          renderer.setError(null);
+        if (this.renderer instanceof DOMRenderer) {
+          this.renderer.setError(null);
           this.render();
         }
-      }, 4000);
+      }, 5000);
     }
   }
 

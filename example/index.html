@@ -3,116 +3,826 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SurveySDK 满意度问卷演示</title>
+  <title>SurveySDK 在线调研平台 · 完整演示</title>
   <style>
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 40px 20px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 32px 20px;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #312e81 100%);
       min-height: 100vh;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: #e2e8f0;
     }
     .page-container {
-      max-width: 800px;
+      max-width: 1280px;
       margin: 0 auto;
+      display: grid;
+      grid-template-columns: 320px 1fr 320px;
+      gap: 24px;
+    }
+    @media (max-width: 1100px) {
+      .page-container { grid-template-columns: 1fr; }
+    }
+    .page-header {
+      grid-column: 1 / -1;
+      text-align: center;
+      margin-bottom: 8px;
     }
     .page-title {
-      text-align: center;
-      color: #fff;
-      margin-bottom: 8px;
-      font-size: 28px;
+      font-size: 32px;
+      font-weight: 800;
+      margin: 0 0 8px 0;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
     .page-subtitle {
-      text-align: center;
-      color: rgba(255,255,255,0.85);
-      margin-bottom: 32px;
       font-size: 14px;
+      color: #94a3b8;
+      margin: 0;
     }
-    #survey-root {
-      margin-bottom: 32px;
+
+    .panel {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
     }
-    .event-log {
-      background: rgba(0,0,0,0.4);
-      backdrop-filter: blur(10px);
-      border-radius: 12px;
-      padding: 16px 20px;
-      color: #e0e7ff;
-      max-height: 240px;
-      overflow-y: auto;
-      font-size: 12px;
-      font-family: Consolas, Monaco, monospace;
-    }
-    .event-log-title {
+    .panel-title {
+      font-size: 14px;
       font-weight: 700;
-      color: #fff;
-      margin-bottom: 10px;
-      font-size: 13px;
-    }
-    .log-item {
-      padding: 4px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-      line-height: 1.6;
-    }
-    .log-item:last-child { border-bottom: none; }
-    .log-time { color: #a5b4fc; margin-right: 8px; }
-    .log-event { color: #fbbf24; font-weight: 600; }
-    .stats-bar {
-      background: rgba(255,255,255,0.15);
-      backdrop-filter: blur(10px);
-      border-radius: 12px;
-      padding: 16px 20px;
-      color: #fff;
-      margin-bottom: 24px;
+      color: #f1f5f9;
+      margin: 0 0 16px 0;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.15);
       display: flex;
-      gap: 24px;
-      flex-wrap: wrap;
-      font-size: 13px;
+      align-items: center;
+      gap: 8px;
     }
-    .stat-item {
-      display: flex;
-      flex-direction: column;
+    .panel-title-icon {
+      font-size: 16px;
+    }
+    .main-panel { min-width: 0; }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .stat-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      border-radius: 10px;
+      padding: 12px;
     }
     .stat-label {
-      color: rgba(255,255,255,0.7);
       font-size: 11px;
+      color: #94a3b8;
       margin-bottom: 4px;
     }
     .stat-value {
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 700;
+      color: #f8fafc;
+      line-height: 1.2;
     }
+    .stat-value.accent { color: #a78bfa; }
+    .stat-value.success { color: #4ade80; }
+    .stat-value.warning { color: #fbbf24; }
+    .stat-value.info { color: #60a5fa; }
+
+    .progress-ring-wrap {
+      display: flex;
+      justify-content: center;
+      padding: 12px 0;
+      margin-bottom: 16px;
+    }
+    .progress-ring {
+      position: relative;
+      width: 120px;
+      height: 120px;
+    }
+    .progress-ring svg { transform: rotate(-90deg); }
+    .progress-ring-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+    .progress-ring-text .percent {
+      font-size: 28px;
+      font-weight: 800;
+      color: #a78bfa;
+      display: block;
+      line-height: 1;
+    }
+    .progress-ring-text .label {
+      font-size: 10px;
+      color: #94a3b8;
+      margin-top: 4px;
+      display: block;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(99, 102, 241, 0.15);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      margin-bottom: 12px;
+    }
+    .status-badge.in-progress { background: rgba(251, 191, 36, 0.15); color: #fcd34d; border-color: rgba(251, 191, 36, 0.3); }
+    .status-badge.submitted { background: rgba(74, 222, 128, 0.15); color: #86efac; border-color: rgba(74, 222, 128, 0.3); }
+    .status-badge.draft-saved { background: rgba(96, 165, 250, 0.15); color: #93c5fd; border-color: rgba(96, 165, 250, 0.3); }
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .action-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .action-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(15, 23, 42, 0.6);
+      color: #e2e8f0;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+    .action-btn:hover {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: rgba(99, 102, 241, 0.4);
+      color: #c7d2fe;
+    }
+    .action-btn.primary {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-color: transparent;
+      color: white;
+    }
+    .action-btn.primary:hover {
+      filter: brightness(1.1);
+    }
+    .action-btn.danger {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+    }
+    .action-btn.danger:hover {
+      background: rgba(239, 68, 68, 0.2);
+    }
+    .action-btn-icon { font-size: 16px; }
+
+    .section-divider {
+      height: 1px;
+      background: rgba(148, 163, 184, 0.15);
+      margin: 16px 0;
+    }
+
+    .question-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 280px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .question-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: 1px solid transparent;
+    }
+    .question-item:hover {
+      background: rgba(99, 102, 241, 0.1);
+      border-color: rgba(99, 102, 241, 0.2);
+    }
+    .question-item.active {
+      background: rgba(99, 102, 241, 0.2);
+      border-color: rgba(99, 102, 241, 0.4);
+      color: #c7d2fe;
+    }
+    .question-item.invalid {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #fecaca;
+    }
+    .question-index {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: rgba(148, 163, 184, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .question-item.answered .question-index {
+      background: rgba(74, 222, 128, 0.2);
+      color: #86efac;
+    }
+    .question-item.invalid .question-index {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+    }
+    .question-title {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .question-type-tag {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      flex-shrink: 0;
+      font-weight: 600;
+    }
+    .type-single { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+    .type-multiple { background: rgba(168, 85, 247, 0.2); color: #d8b4fe; }
+    .type-rating { background: rgba(251, 191, 36, 0.2); color: #fcd34d; }
+    .type-text { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+
+    .toast-container {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 9999;
+    }
+    .toast {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      min-width: 260px;
+      max-width: 400px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .toast.success {
+      background: rgba(34, 197, 94, 0.9);
+      border: 1px solid rgba(74, 222, 128, 0.5);
+      color: white;
+    }
+    .toast.info {
+      background: rgba(59, 130, 246, 0.9);
+      border: 1px solid rgba(96, 165, 250, 0.5);
+      color: white;
+    }
+    .toast.warning {
+      background: rgba(245, 158, 11, 0.9);
+      border: 1px solid rgba(251, 191, 36, 0.5);
+      color: white;
+    }
+    .toast.error {
+      background: rgba(239, 68, 68, 0.9);
+      border: 1px solid rgba(248, 113, 113, 0.5);
+      color: white;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(120%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    .toast.fade-out {
+      animation: slideOut 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes slideOut {
+      to { transform: translateX(120%); opacity: 0; }
+    }
+
+    .event-log {
+      max-height: 340px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .log-item {
+      padding: 8px 10px;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      background: rgba(15, 23, 42, 0.5);
+      border-left: 3px solid #6366f1;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      word-break: break-all;
+    }
+    .log-item.log-draftSaved { border-left-color: #3b82f6; }
+    .log-item.log-draftLoaded { border-left-color: #10b981; }
+    .log-item.log-submitSuccess { border-left-color: #22c55e; }
+    .log-item.log-complete { border-left-color: #a855f7; }
+    .log-item.log-validateError { border-left-color: #ef4444; }
+    .log-item.log-displayModeChange { border-left-color: #f59e0b; }
+    .log-time {
+      color: #64748b;
+      font-size: 10px;
+      margin-bottom: 2px;
+      display: block;
+    }
+    .log-event {
+      color: #fbbf24;
+      font-weight: 700;
+      margin-bottom: 2px;
+      display: block;
+    }
+    .log-payload {
+      color: #cbd5e1;
+    }
+
+    .stats-board {
+      display: none;
+    }
+    .stats-board.visible {
+      display: block;
+    }
+    .stats-section {
+      margin-bottom: 16px;
+    }
+    .stats-section-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #94a3b8;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .bar-chart {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .bar-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .bar-label {
+      flex: 0 0 auto;
+      min-width: 80px;
+      max-width: 100px;
+      font-size: 11px;
+      color: #cbd5e1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .bar-track {
+      flex: 1;
+      height: 20px;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+    .bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #6366f1, #a855f7);
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+    .bar-count {
+      flex: 0 0 auto;
+      font-size: 11px;
+      color: #94a3b8;
+      font-weight: 600;
+      min-width: 40px;
+      text-align: right;
+    }
+    .rating-meter {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .rating-score {
+      font-size: 24px;
+      font-weight: 800;
+      color: #fbbf24;
+      min-width: 50px;
+    }
+    .rating-detail {
+      flex: 1;
+    }
+    .rating-title {
+      font-size: 12px;
+      color: #e2e8f0;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    .rating-bucket {
+      font-size: 10px;
+      color: #94a3b8;
+    }
+    .bucket-poor { color: #ef4444; }
+    .bucket-fair { color: #f59e0b; }
+    .bucket-good { color: #10b981; }
+    .bucket-excellent { color: #22c55e; }
+    .text-summary-card {
+      padding: 10px;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .text-summary-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #e2e8f0;
+      margin-bottom: 6px;
+    }
+    .keyword-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .keyword-tag {
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #6ee7b7;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .summary-item {
+      padding: 8px 10px;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 8px;
+    }
+    .summary-item-label {
+      font-size: 10px;
+      color: #64748b;
+      margin-bottom: 2px;
+    }
+    .summary-item-value {
+      font-size: 14px;
+      font-weight: 700;
+      color: #e2e8f0;
+    }
+
+    .code-snippet {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 11px;
+      line-height: 1.7;
+      overflow-x: auto;
+      color: #cbd5e1;
+    }
+    .code-snippet .comment { color: #64748b; }
+    .code-snippet .keyword { color: #c084fc; }
+    .code-snippet .string { color: #86efac; }
+    .code-snippet .number { color: #fbbf24; }
+    .code-snippet .func { color: #60a5fa; }
+
+    .integration-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+    .integration-tab {
+      padding: 8px 14px;
+      border-radius: 6px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.15);
+      color: #94a3b8;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+    .integration-tab.active {
+      background: rgba(99, 102, 241, 0.2);
+      border-color: rgba(99, 102, 241, 0.4);
+      color: #c7d2fe;
+    }
+    .integration-content {
+      display: none;
+    }
+    .integration-content.active {
+      display: block;
+    }
+
+    .empty-state {
+      padding: 32px 16px;
+      text-align: center;
+      color: #64748b;
+      font-size: 12px;
+    }
+    .empty-state-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+      opacity: 0.5;
+    }
+
+    .survey-wrapper {
+      min-height: 500px;
+    }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.3); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.5); }
   </style>
 </head>
 <body>
-  <div class="page-container">
-    <h1 class="page-title">📊 SurveySDK 在线调研平台演示</h1>
-    <p class="page-subtitle">企业内部满意度问卷嵌入 SDK · 支持 4 种题型 · 跳题逻辑 · 进度保存 · 统计分析</p>
+  <div class="toast-container" id="toast-container"></div>
 
-    <div class="stats-bar" id="stats-bar">
-      <div class="stat-item">
-        <span class="stat-label">完成率</span>
-        <span class="stat-value" id="stat-completion">0%</span>
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">📊 SurveySDK 在线调研平台 · 完整演示</h1>
+      <p class="page-subtitle">企业内部满意度问卷嵌入 SDK · 一题一页 / 整页展开双模式 · 草稿完整恢复 · 厚统计数据 · 双路径接入演示</p>
+    </div>
+
+    <!-- 左侧面板：状态 + 操作 + 题目导航 -->
+    <div class="panel">
+      <h3 class="panel-title"><span class="panel-title-icon">📋</span>调研状态面板</h3>
+
+      <div class="status-badge" id="status-badge">
+        <span class="status-dot"></span>
+        <span id="status-text">未开始</span>
       </div>
-      <div class="stat-item">
-        <span class="stat-label">已答题目</span>
-        <span class="stat-value" id="stat-answered">0/0</span>
+
+      <div class="progress-ring-wrap">
+        <div class="progress-ring">
+          <svg width="120" height="120" viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(99, 102, 241, 0.15)" stroke-width="10"/>
+            <circle id="progress-ring-circle" cx="60" cy="60" r="52" fill="none" stroke="url(#progressGradient)" stroke-width="10" stroke-linecap="round" stroke-dasharray="326.73" stroke-dashoffset="326.73"/>
+            <defs>
+              <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#6366f1"/>
+                <stop offset="100%" stop-color="#a855f7"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <div class="progress-ring-text">
+            <span class="percent" id="progress-percent">0%</span>
+            <span class="label">完成率</span>
+          </div>
+        </div>
       </div>
-      <div class="stat-item">
-        <span class="stat-label">当前状态</span>
-        <span class="stat-value" id="stat-status">未开始</span>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">已答 / 总题数</div>
+          <div class="stat-value info" id="stat-answered">0 / 0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">必填已答</div>
+          <div class="stat-value success" id="stat-required">0 / 0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">平均得分</div>
+          <div class="stat-value warning" id="stat-score">-</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">显示模式</div>
+          <div class="stat-value accent" id="stat-mode">一题一页</div>
+        </div>
       </div>
-      <div class="stat-item">
-        <span class="stat-label">平均得分</span>
-        <span class="stat-value" id="stat-score">-</span>
+
+      <div class="section-divider"></div>
+
+      <h3 class="panel-title"><span class="panel-title-icon">🎛️</span>快捷操作</h3>
+      <div class="action-group">
+        <button class="action-btn primary" id="btn-toggle-mode">
+          <span><span class="action-btn-icon">🔄</span>切换显示模式</span>
+          <span id="btn-mode-text">整页展开</span>
+        </button>
+        <button class="action-btn" id="btn-save-draft">
+          <span><span class="action-btn-icon">💾</span>保存草稿</span>
+        </button>
+        <button class="action-btn" id="btn-check-invalid">
+          <span><span class="action-btn-icon">🔍</span>检查必答题</span>
+        </button>
+        <button class="action-btn" id="btn-list-invalid">
+          <span><span class="action-btn-icon">📍</span>列出未答题</span>
+        </button>
+        <button class="action-btn danger" id="btn-restart">
+          <span><span class="action-btn-icon">🔄</span>重新开始（清除草稿）</span>
+        </button>
+      </div>
+
+      <div class="section-divider"></div>
+
+      <h3 class="panel-title"><span class="panel-title-icon">🧭</span>题目导航</h3>
+      <div class="question-list" id="question-list"></div>
+    </div>
+
+    <!-- 中间主面板：问卷渲染 + 提交结果厚摘要 -->
+    <div class="panel main-panel">
+      <h3 class="panel-title"><span class="panel-title-icon">📝</span>问卷填写区</h3>
+      <div class="survey-wrapper" id="survey-root"></div>
+
+      <div id="result-summary-panel" style="display:none; margin-top:24px;">
+        <div class="section-divider"></div>
+        <h3 class="panel-title"><span class="panel-title-icon">📈</span>本次调研 · 厚结果摘要</h3>
+
+        <div class="summary-grid">
+          <div class="summary-item">
+            <div class="summary-item-label">提交ID</div>
+            <div class="summary-item-value" id="sum-submission-id" style="font-size:11px; word-break:break-all;">-</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-item-label">答题时长</div>
+            <div class="summary-item-value" id="sum-duration">-</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-item-label">完成率</div>
+            <div class="summary-item-value" id="sum-rate" style="color:#a78bfa;">-</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-item-label">加权平均分</div>
+            <div class="summary-item-value" id="sum-weighted" style="color:#fbbf24;">-</div>
+          </div>
+        </div>
+
+        <details open style="margin-bottom:12px;">
+          <summary style="cursor:pointer; font-size:13px; font-weight:600; color:#cbd5e1; margin-bottom:8px;">📊 评分概览（NPS/加权平均/分桶）</summary>
+          <div id="sum-rating-overview" style="margin-top:8px;"></div>
+        </details>
+
+        <details open style="margin-bottom:12px;">
+          <summary style="cursor:pointer; font-size:13px; font-weight:600; color:#cbd5e1; margin-bottom:8px;">🎯 选项分布（单选/多选）</summary>
+          <div id="sum-option-distributions" style="margin-top:8px;"></div>
+        </details>
+
+        <details open style="margin-bottom:12px;">
+          <summary style="cursor:pointer; font-size:13px; font-weight:600; color:#cbd5e1; margin-bottom:8px;">📝 文本汇总与关键词</summary>
+          <div id="sum-text-summaries" style="margin-top:8px;"></div>
+        </details>
+
+        <details>
+          <summary style="cursor:pointer; font-size:13px; font-weight:600; color:#cbd5e1; margin-bottom:8px;">📄 完整 JSON 数据（宿主系统可用）</summary>
+          <pre class="code-snippet" id="sum-json" style="margin-top:8px; max-height:300px; overflow:auto; white-space:pre-wrap;"></pre>
+        </details>
+      </div>
+
+      <div class="section-divider"></div>
+      <h3 class="panel-title"><span class="panel-title-icon">📦</span>接入发布演示（构建产物双路径）</h3>
+
+      <div class="integration-tabs">
+        <button class="integration-tab active" data-tab="source">方式一：源码接入（ESM Import）</button>
+        <button class="integration-tab" data-tab="umd">方式二：构建产物（UMD Script）</button>
+        <button class="integration-tab" data-tab="guide">接入步骤</button>
+      </div>
+
+      <div class="integration-content active" id="tab-source">
+        <p style="font-size:12px; color:#94a3b8; margin:0 0 10px 0;">当前演示页使用此方式。适合使用 Vite/Webpack 等现代打包工具的业务项目。</p>
+        <pre class="code-snippet"><span class="comment">// package.json</span>
+{
+  <span class="string">"dependencies"</span>: {
+    <span class="string">"survey-sdk"</span>: <span class="string">"file:./dist"</span>
+  }
+}
+
+<span class="comment">// 业务页面 app.ts</span>
+<span class="keyword">import</span> { SurveySDK } <span class="keyword">from</span> <span class="string">'survey-sdk'</span>;
+
+<span class="keyword">const</span> sdk = SurveySDK.<span class="func">create</span>(surveyConfig, {
+  autoSave: <span class="keyword">true</span>,
+  submitUrl: <span class="string">'/api/survey/submit'</span>,
+  renderConfig: { displayMode: <span class="string">'all'</span> }
+});
+sdk.<span class="func">setUser</span>({ userId: <span class="string">'EMP_001'</span> });
+sdk.<span class="func">mount</span>(<span class="string">'#survey-container'</span>);
+
+sdk.<span class="func">on</span>(<span class="string">'submitSuccess'</span>, ({ result, summary }) => {
+  console.<span class="func">log</span>(<span class="string">'厚摘要'</span>, summary.optionDistributions, summary.ratingOverview);
+});</pre>
+      </div>
+
+      <div class="integration-content" id="tab-umd">
+        <p style="font-size:12px; color:#94a3b8; margin:0 0 10px 0;">npm run build 后直接拿 dist/survey-sdk.umd.js，无需构建工具即可接入老系统。</p>
+        <pre class="code-snippet"><span class="comment">&lt;!-- 1. 引入 UMD 构建产物（npm run build 产出） --&gt;</span>
+<span class="keyword">&lt;script</span> <span class="string">src</span>=<span class="string">"/dist/survey-sdk.umd.js"</span><span class="keyword">&gt;&lt;/script&gt;</span>
+
+<span class="comment">&lt;!-- 2. 页面容器 --&gt;</span>
+<span class="keyword">&lt;div</span> <span class="string">id</span>=<span class="string">"survey-container"</span><span class="keyword">&gt;&lt;/div&gt;</span>
+
+<span class="comment">&lt;!-- 3. 初始化（全局 window.SurveySDK） --&gt;</span>
+<span class="keyword">&lt;script&gt;</span>
+  <span class="keyword">const</span> SurveySDK = window.SurveySDK;
+  <span class="keyword">const</span> sdk = SurveySDK.<span class="func">create</span>(surveyConfig, {
+    autoSave: <span class="keyword">true</span>,
+    autoSaveInterval: <span class="number">15000</span>,
+    storageKeyPrefix: <span class="string">'biz_survey'</span>
+  });
+  sdk.<span class="func">setUser</span>({ userId: <span class="string">'EMP_12345'</span>, username: <span class="string">'李四'</span> });
+  sdk.<span class="func">mount</span>(<span class="string">'#survey-container'</span>);
+
+  <span class="comment">// 整页模式 + 检查必答题定位</span>
+  sdk.<span class="func">setDisplayMode</span>(<span class="string">'all'</span>);
+  sdk.<span class="func">on</span>(<span class="string">'validateError'</span>, ({ invalidQuestionIds }) => {
+    console.<span class="func">log</span>(<span class="string">'未答必答题'</span>, invalidQuestionIds);
+  });
+<span class="keyword">&lt;/script&gt;</span></pre>
+      </div>
+
+      <div class="integration-content" id="tab-guide">
+        <div style="font-size:12px; line-height:1.8; color:#cbd5e1;">
+          <p style="margin:0 0 10px 0;"><strong>✅ 接入步骤（业务同事照着做即可）：</strong></p>
+          <ol style="margin:0 0 12px 20px; padding:0;">
+            <li>运行 <code style="background:rgba(15,23,42,0.6); padding:2px 6px; border-radius:4px;">npm run build</code>，等待 dist 目录产出</li>
+            <li>拷贝 dist 下所有文件到业务项目（survey-sdk.umd.js / index.d.ts 等）</li>
+            <li>按上面"方式一"或"方式二"引入 SDK</li>
+            <li>准备好 Survey 配置 JSON（至少含 meta + questions 数组）</li>
+            <li>调用 SurveySDK.create() → setUser() → mount() 三步完成挂载</li>
+            <li>监听 submitSuccess 事件，拿 result.submissionId 和 summary 做完成页</li>
+          </ol>
+          <p style="margin:0; color:#94a3b8;">💡 推荐：新业务用方式一 ESM 导入 + TS 类型提示；老系统用方式二 UMD 零构建接入。</p>
+        </div>
       </div>
     </div>
 
-    <div id="survey-root"></div>
+    <!-- 右侧面板：实时统计看板 + 事件日志 -->
+    <div class="panel">
+      <h3 class="panel-title"><span class="panel-title-icon">📊</span>实时统计看板</h3>
 
-    <div class="event-log">
-      <div class="event-log-title">🔔 事件日志</div>
-      <div id="log-container"></div>
+      <div id="stats-board-empty" class="empty-state">
+        <div class="empty-state-icon">📭</div>
+        <div>暂无可展示统计数据<br/>开始答题后自动刷新</div>
+      </div>
+
+      <div class="stats-board" id="stats-board">
+        <div class="stats-section">
+          <div class="stats-section-title">⭐ 评分概览</div>
+          <div id="live-rating-overview"></div>
+        </div>
+
+        <div class="stats-section">
+          <div class="stats-section-title">🎯 选项分布</div>
+          <div id="live-option-distributions"></div>
+        </div>
+
+        <div class="stats-section">
+          <div class="stats-section-title">📝 文本汇总</div>
+          <div id="live-text-summaries"></div>
+        </div>
+      </div>
+
+      <div class="section-divider"></div>
+      <h3 class="panel-title"><span class="panel-title-icon">🔔</span>事件日志</h3>
+      <div class="event-log" id="event-log">
+        <div class="empty-state" id="log-empty" style="padding:20px 8px;">
+          <div class="empty-state-icon" style="font-size:24px;">🔕</div>
+          <div>暂无事件<br/>操作问卷后自动记录</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -120,42 +830,76 @@
     import { SurveySDK } from '../src/index.ts';
     import { satisfactionSurvey } from './sampleSurvey.ts';
 
-    const logContainer = document.getElementById('log-container');
-    function log(eventName, payload) {
+    // ======================== Toast 工具 ========================
+    const toastContainer = document.getElementById('toast-container');
+    function showToast(message, type = 'info', duration = 3000) {
+      const icons = { success: '✅', info: 'ℹ️', warning: '⚠️', error: '❌' };
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${message}</span>`;
+      toastContainer.appendChild(toast);
+      setTimeout(() => {
+        toast.classList.add('fade-out');
+        setTimeout(() => toast.remove(), 300);
+      }, duration);
+    }
+
+    // ======================== 状态文本映射 ========================
+    const statusMap = {
+      not_started: { text: '未开始', cls: '' },
+      in_progress: { text: '答题中', cls: 'in-progress' },
+      draft_saved: { text: '草稿已存', cls: 'draft-saved' },
+      submitted: { text: '已提交', cls: 'submitted' },
+      error: { text: '出错', cls: '' }
+    };
+    const typeTagMap = {
+      single: { label: '单选', cls: 'type-single' },
+      multiple: { label: '多选', cls: 'type-multiple' },
+      rating: { label: '打分', cls: 'type-rating' },
+      text: { label: '文本', cls: 'type-text' }
+    };
+    const bucketMap = {
+      poor: { label: '较差', cls: 'bucket-poor' },
+      fair: { label: '一般', cls: 'bucket-fair' },
+      good: { label: '良好', cls: 'bucket-good' },
+      excellent: { label: '优秀', cls: 'bucket-excellent' }
+    };
+
+    // ======================== 事件日志 ========================
+    const logContainer = document.getElementById('event-log');
+    const logEmpty = document.getElementById('log-empty');
+    function logEvent(eventName, payload) {
+      if (logEmpty) logEmpty.style.display = 'none';
       const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
       const item = document.createElement('div');
-      item.className = 'log-item';
-      item.innerHTML = `<span class="log-time">[${time}]</span><span class="log-event">${eventName}</span>: ${JSON.stringify(payload).slice(0, 150)}`;
+      item.className = `log-item log-${eventName}`;
+      let payloadStr = '';
+      try {
+        payloadStr = JSON.stringify(payload).slice(0, 220);
+      } catch (e) { payloadStr = String(payload); }
+      item.innerHTML = `
+        <span class="log-time">${time}</span>
+        <span class="log-event">${eventName}</span>
+        <span class="log-payload">${payloadStr}</span>
+      `;
       logContainer.insertBefore(item, logContainer.firstChild);
-      if (logContainer.children.length > 30) {
+      while (logContainer.children.length > 40) {
         logContainer.removeChild(logContainer.lastChild);
       }
     }
 
-    function updateStats(sdk) {
-      const rate = sdk.getCompletionRate();
-      document.getElementById('stat-completion').textContent = Math.round(rate.rate * 100) + '%';
-      document.getElementById('stat-answered').textContent = `${rate.answeredQuestions}/${rate.totalQuestions}`;
-      const statusMap = {
-        not_started: '未开始',
-        in_progress: '答题中',
-        draft_saved: '草稿已存',
-        submitted: '已提交',
-        error: '错误'
-      };
-      document.getElementById('stat-status').textContent = statusMap[sdk.getStatus()] || sdk.getStatus();
-      const scoreInfo = sdk.getAverageScore();
-      document.getElementById('stat-score').textContent = scoreInfo.count > 0 ? scoreInfo.average.toFixed(1) : '-';
-    }
-
+    // ======================== 初始化 SDK ========================
     const sdk = SurveySDK.create(satisfactionSurvey, {
       autoSave: true,
-      autoSaveInterval: 10000,
+      autoSaveInterval: 15000,
       enableLogging: true,
-      storageKeyPrefix: 'demo_survey',
+      storageKeyPrefix: 'demo_survey_v2',
+      startFromSavedProgress: true,
       renderConfig: {
         showProgress: true,
         showQuestionIndex: true,
+        theme: 'light',
+        displayMode: 'single',
         buttonTexts: {
           prev: '← 上一题',
           next: '下一题 →',
@@ -172,35 +916,378 @@
       department: '产品部'
     });
 
-    sdk.on('start', (p) => { log('start', p); updateStats(sdk); });
-    sdk.on('questionAnswer', (p) => { log('questionAnswer', { q: p.questionId, v: p.value }); updateStats(sdk); });
-    sdk.on('questionChange', (p) => { log('questionChange', `从第${p.fromIndex + 1}题 → 第${p.toIndex + 1}题`); updateStats(sdk); });
-    sdk.on('validateError', (p) => { log('validateError', { err: p.errorMessage }); });
-    sdk.on('draftSaved', (p) => { log('draftSaved', { status: p.progress.status }); updateStats(sdk); });
-    sdk.on('draftLoaded', (p) => { log('draftLoaded', { answered: Object.keys(p.progress.answers).length }); updateStats(sdk); });
-    sdk.on('submit', (p) => { log('submit', { surveyId: p.payload.surveyId, answers: Object.keys(p.payload.answers).length + '题' }); });
-    sdk.on('submitSuccess', (p) => { log('submitSuccess', { subId: p.result.submissionId }); updateStats(sdk); });
-    sdk.on('submitError', (p) => { log('submitError', p.error.message); });
-    sdk.on('complete', (p) => {
-      log('complete', { rate: Math.round(p.summary.completionRate * 100) + '%', avg: p.summary.averageScore?.toFixed(1) });
-      console.log('📋 完整结果摘要:', p.summary);
-      console.log('📊 题目统计:', sdk.getAllStatistics());
-      updateStats(sdk);
-    });
-    sdk.on('restart', (p) => { log('restart', p); updateStats(sdk); });
-
-    sdk.mount('#survey-root');
-    updateStats(sdk);
-
     window.__sdk = sdk;
-    console.log('%c✅ SurveySDK 已挂载成功！可以通过 window.__sdk 访问 SDK 实例', 'color: #10b981; font-weight: bold;');
-    console.log('📖 可用方法示例:');
-    console.log('  window.__sdk.next()          → 下一题');
-    console.log('  window.__sdk.prev()          → 上一题');
-    console.log('  window.__sdk.submit()        → 提交问卷');
-    console.log('  window.__sdk.saveDraft()     → 保存草稿');
-    console.log('  window.__sdk.restart()       → 重新开始');
-    console.log('  window.__sdk.getResultSummary() → 获取结果摘要');
+
+    // ======================== UI 更新函数 ========================
+    const ringCircle = document.getElementById('progress-ring-circle');
+    const RING_CIRCUM = 2 * Math.PI * 52;
+
+    function updateDashboard() {
+      // 完成率圆环
+      const rate = sdk.getCompletionRate();
+      const percent = Math.round(rate.rate * 100);
+      const offset = RING_CIRCUM - (rate.rate * RING_CIRCUM);
+      ringCircle.setAttribute('stroke-dashoffset', offset);
+      document.getElementById('progress-percent').textContent = percent + '%';
+
+      // 状态
+      const status = sdk.getStatus();
+      const s = statusMap[status] || statusMap.not_started;
+      const badge = document.getElementById('status-badge');
+      badge.className = `status-badge ${s.cls}`;
+      document.getElementById('status-text').textContent = s.text;
+
+      // 统计卡
+      document.getElementById('stat-answered').textContent = `${rate.answeredQuestions} / ${rate.totalQuestions}`;
+      document.getElementById('stat-required').textContent = `${rate.requiredAnswered} / ${rate.requiredTotal}`;
+
+      const avg = sdk.getAverageScore();
+      document.getElementById('stat-score').textContent = avg.count > 0 ? avg.average.toFixed(1) : '-';
+
+      const mode = sdk.getDisplayMode();
+      document.getElementById('stat-mode').textContent = mode === 'single' ? '一题一页' : '整页展开';
+      document.getElementById('btn-mode-text').textContent = mode === 'single' ? '整页展开' : '一题一页';
+
+      // 题目导航列表
+      renderQuestionList();
+
+      // 实时统计看板
+      renderLiveStats();
+    }
+
+    function renderQuestionList() {
+      const list = document.getElementById('question-list');
+      const questions = satisfactionSurvey.questions;
+      const answers = sdk.getAnswers();
+      const currentIdx = sdk.getCurrentQuestionIndex();
+      const invalidIds = new Set(sdk.listInvalidQuestions());
+      const answeredIds = new Set(Object.keys(answers));
+
+      list.innerHTML = questions.map((q, idx) => {
+        const answered = answeredIds.has(q.id);
+        const invalid = invalidIds.has(q.id);
+        const active = idx === currentIdx && sdk.getDisplayMode() === 'single';
+        const typeTag = typeTagMap[q.type] || typeTagMap.single;
+        let cls = 'question-item';
+        if (answered) cls += ' answered';
+        if (invalid) cls += ' invalid';
+        if (active) cls += ' active';
+        return `
+          <div class="${cls}" data-qid="${q.id}" data-idx="${idx}">
+            <div class="question-index">${idx + 1}</div>
+            <div class="question-title" title="${q.title}">${q.title}</div>
+            <span class="question-type-tag ${typeTag.cls}">${typeTag.label}</span>
+          </div>
+        `;
+      }).join('');
+
+      list.querySelectorAll('.question-item').forEach(el => {
+        el.addEventListener('click', () => {
+          const qid = el.getAttribute('data-qid');
+          sdk.jumpAndHighlight(qid);
+          showToast(`已跳转到第 ${parseInt(el.getAttribute('data-idx')) + 1} 题`, 'info', 1500);
+        });
+      });
+    }
+
+    function renderLiveStats() {
+      const empty = document.getElementById('stats-board-empty');
+      const board = document.getElementById('stats-board');
+      const overview = sdk.getRatingOverview();
+      const distributions = sdk.getOptionDistributions();
+      const textSummaries = sdk.getTextSummaries();
+      const avg = sdk.getAverageScore();
+
+      const hasData = overview.totalRatingQuestions > 0 || distributions.length > 0 || textSummaries.some(t => t.totalResponses > 0);
+
+      if (!hasData) {
+        empty.style.display = 'block';
+        board.classList.remove('visible');
+        return;
+      }
+
+      empty.style.display = 'none';
+      board.classList.add('visible');
+
+      // 评分概览
+      const ratingHtml = overview.items.map(item => {
+        const bucket = bucketMap[item.scoreBucket] || bucketMap.fair;
+        return `
+          <div class="rating-meter">
+            <div class="rating-score">${item.averageScore.toFixed(1)}</div>
+            <div class="rating-detail">
+              <div class="rating-title">${item.questionTitle}</div>
+              <div class="rating-bucket"><span class="${bucket.cls}">${bucket.label}</span> · 满分 ${item.maxValue}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      const weightedHtml = overview.weightedAverage > 0 ? `
+        <div class="stat-card" style="margin-top:8px;">
+          <div class="stat-label">全部评分题加权平均</div>
+          <div class="stat-value warning">${overview.weightedAverage.toFixed(2)}</div>
+        </div>
+      ` : '';
+      document.getElementById('live-rating-overview').innerHTML = ratingHtml + weightedHtml;
+
+      // 选项分布
+      const distHtml = distributions.map(dist => {
+        const maxCount = Math.max(...dist.items.map(i => i.count), 1);
+        const barsHtml = dist.items.map(item => {
+          const widthPct = (item.count / maxCount) * 100;
+          return `
+            <div class="bar-row">
+              <div class="bar-label" title="${item.label}">${item.label}</div>
+              <div class="bar-track">
+                <div class="bar-fill" style="width:${widthPct}%"></div>
+              </div>
+              <div class="bar-count">${item.count} (${Math.round(item.percentage * 100)}%)</div>
+            </div>
+          `;
+        }).join('');
+        return `
+          <div style="margin-bottom:12px;">
+            <div style="font-size:12px; font-weight:600; color:#e2e8f0; margin-bottom:6px;">
+              ${dist.questionTitle}
+              <span style="font-size:10px; color:#64748b; margin-left:6px;">共 ${dist.totalResponses} 人回答</span>
+            </div>
+            <div class="bar-chart">${barsHtml}</div>
+          </div>
+        `;
+      }).join('');
+      document.getElementById('live-option-distributions').innerHTML = distHtml || '<div style="font-size:11px; color:#64748b; padding:8px;">暂无单选/多选题数据</div>';
+
+      // 文本汇总
+      const textHtml = textSummaries.map(ts => {
+        if (ts.totalResponses === 0) return '';
+        const keywordsHtml = ts.keywords.slice(0, 8).map(k => `<span class="keyword-tag">${k}</span>`).join('');
+        return `
+          <div class="text-summary-card">
+            <div class="text-summary-title">${ts.questionTitle} <span style="color:#64748b; font-size:10px;">· ${ts.totalResponses} 条 · 平均 ${ts.averageLength.toFixed(0)} 字</span></div>
+            ${keywordsHtml ? `<div class="keyword-tags">${keywordsHtml}</div>` : '<div style="font-size:11px; color:#64748b;">关键词提取中...</div>'}
+          </div>
+        `;
+      }).filter(Boolean).join('');
+      document.getElementById('live-text-summaries').innerHTML = textHtml || '<div style="font-size:11px; color:#64748b; padding:8px;">暂未填写文本题</div>';
+    }
+
+    function renderSubmitResult(summary, submissionId) {
+      const panel = document.getElementById('result-summary-panel');
+      panel.style.display = 'block';
+
+      document.getElementById('sum-submission-id').textContent = submissionId || '-';
+      const durSec = summary.durationSeconds || 0;
+      const mm = Math.floor(durSec / 60);
+      const ss = Math.round(durSec % 60);
+      document.getElementById('sum-duration').textContent = mm > 0 ? `${mm}分${ss}秒` : `${ss}秒`;
+      document.getElementById('sum-rate').textContent = Math.round(summary.completionRate * 100) + '%';
+      document.getElementById('sum-weighted').textContent = summary.ratingOverview?.weightedAverage?.toFixed(2) || '-';
+
+      // 评分概览
+      const ro = summary.ratingOverview;
+      const ratingSumHtml = ro.items.map(item => {
+        const bucket = bucketMap[item.scoreBucket] || bucketMap.fair;
+        return `
+          <div class="rating-meter">
+            <div class="rating-score">${item.averageScore.toFixed(1)}</div>
+            <div class="rating-detail">
+              <div class="rating-title">${item.questionTitle}</div>
+              <div class="rating-bucket">
+                <span class="${bucket.cls}">${bucket.label}</span> · 
+                中位数 ${item.median} · 满分 ${item.maxValue}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      const npsHtml = typeof ro.netPromoterScore === 'number' ? `
+        <div class="summary-grid" style="margin-top:10px;">
+          <div class="summary-item">
+            <div class="summary-item-label">NPS 净推荐值</div>
+            <div class="summary-item-value" style="color:${ro.netPromoterScore >= 0 ? '#4ade80' : '#f87171'};">${ro.netPromoterScore >= 0 ? '+' : ''}${ro.netPromoterScore}</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-item-label">评分题数</div>
+            <div class="summary-item-value">${ro.totalRatingQuestions}</div>
+          </div>
+        </div>
+      ` : '';
+      document.getElementById('sum-rating-overview').innerHTML = ratingSumHtml + npsHtml;
+
+      // 选项分布
+      const distSumHtml = summary.optionDistributions.map(dist => {
+        const maxCount = Math.max(...dist.items.map(i => i.count), 1);
+        const bars = dist.items.map(item => {
+          const w = (item.count / maxCount) * 100;
+          return `
+            <div class="bar-row">
+              <div class="bar-label">${item.label}</div>
+              <div class="bar-track"><div class="bar-fill" style="width:${w}%"></div></div>
+              <div class="bar-count">${item.count} (${Math.round(item.percentage * 100)}%)</div>
+            </div>
+          `;
+        }).join('');
+        return `
+          <div style="margin-bottom:14px;">
+            <div style="font-size:12px; font-weight:600; color:#e2e8f0; margin-bottom:6px;">
+              ${dist.questionTitle} <span style="color:#64748b; font-size:10px;">(${dist.type === 'single' ? '单选' : '多选'} · ${dist.totalResponses} 人)</span>
+            </div>
+            <div class="bar-chart">${bars}</div>
+          </div>
+        `;
+      }).join('');
+      document.getElementById('sum-option-distributions').innerHTML = distSumHtml || '<div style="color:#64748b; font-size:11px;">无选项数据</div>';
+
+      // 文本汇总
+      const textSumHtml = summary.textSummaries.map(ts => {
+        if (ts.totalResponses === 0) return '';
+        const tags = ts.keywords.slice(0, 10).map(k => `<span class="keyword-tag">${k}</span>`).join('');
+        const sents = ts.items.slice(0, 3).map(it => `<div style="font-size:11px; color:#94a3b8; padding:4px 0; border-top:1px solid rgba(148,163,184,0.1);">· ${it.value}</div>`).join('');
+        return `
+          <div class="text-summary-card">
+            <div class="text-summary-title">${ts.questionTitle} <span style="color:#64748b; font-size:10px;">· ${ts.totalResponses} 条 · ${ts.totalLength} 字</span></div>
+            ${tags ? `<div class="keyword-tags" style="margin-bottom:8px;">${tags}</div>` : ''}
+            ${sents}
+          </div>
+        `;
+      }).filter(Boolean).join('');
+      document.getElementById('sum-text-summaries').innerHTML = textSumHtml || '<div style="color:#64748b; font-size:11px;">无文本数据</div>';
+
+      // JSON
+      document.getElementById('sum-json').textContent = JSON.stringify(summary, null, 2);
+    }
+
+    // ======================== 绑定左侧按钮 ========================
+    document.getElementById('btn-toggle-mode').addEventListener('click', () => {
+      const newMode = sdk.toggleDisplayMode();
+      showToast(`已切换到「${newMode === 'single' ? '一题一页' : '整页展开'}」模式`, 'info', 2000);
+    });
+
+    document.getElementById('btn-save-draft').addEventListener('click', async () => {
+      const ok = await sdk.saveDraft();
+      showToast(ok ? '草稿保存成功！' : '草稿保存失败', ok ? 'success' : 'error', 2500);
+    });
+
+    document.getElementById('btn-check-invalid').addEventListener('click', () => {
+      const ids = sdk.listInvalidQuestions();
+      if (ids.length === 0) {
+        showToast('太棒了！所有必答题均已完成 ✨', 'success', 2500);
+      } else {
+        showToast(`发现 ${ids.length} 道未答必答题，已在左侧导航和问卷中标记`, 'warning', 3500);
+        if (ids[0]) sdk.jumpAndHighlight(ids[0]);
+      }
+    });
+
+    document.getElementById('btn-list-invalid').addEventListener('click', () => {
+      const ids = sdk.listInvalidQuestions();
+      if (ids.length === 0) {
+        showToast('所有题目回答完整', 'success', 2000);
+      } else {
+        const names = ids.map(id => {
+          const q = satisfactionSurvey.questions.find(x => x.id === id);
+          return q ? q.title : id;
+        });
+        showToast(`未答必答题：${names.join('、')}`, 'warning', 5000);
+      }
+    });
+
+    document.getElementById('btn-restart').addEventListener('click', () => {
+      if (confirm('确定要重新开始吗？当前草稿和进度将被清除。')) {
+        sdk.restart();
+        showToast('已重置，欢迎重新填写', 'info', 2000);
+      }
+    });
+
+    // 接入方式 tabs
+    document.querySelectorAll('.integration-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const target = tab.getAttribute('data-tab');
+        document.querySelectorAll('.integration-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.integration-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(`tab-${target}`).classList.add('active');
+      });
+    });
+
+    // ======================== 绑定 SDK 事件 ========================
+    sdk.on('start', (p) => { logEvent('start', { surveyId: p.surveyId }); updateDashboard(); });
+
+    sdk.on('questionAnswer', (p) => {
+      logEvent('questionAnswer', { q: p.questionId, v: typeof p.value === 'string' && p.value.length > 30 ? p.value.slice(0, 30) + '...' : p.value });
+      updateDashboard();
+    });
+
+    sdk.on('questionChange', (p) => {
+      logEvent('questionChange', `${p.fromIndex + 1} → ${p.toIndex + 1}`);
+      updateDashboard();
+    });
+
+    sdk.on('displayModeChange', (p) => {
+      logEvent('displayModeChange', { from: p.from, to: p.to });
+      updateDashboard();
+    });
+
+    sdk.on('validateError', (p) => {
+      logEvent('validateError', { err: p.errorMessage, ids: p.invalidQuestionIds || [] });
+      updateDashboard();
+    });
+
+    sdk.on('draftSaved', (p) => {
+      logEvent('draftSaved', { key: p.storageKey, answered: `${p.answeredCount}/${p.totalCount}`, rate: Math.round(p.completionRate * 100) + '%', status: p.status });
+      showToast(`💾 草稿已保存（${p.answeredCount}/${p.totalCount} 题 · ${Math.round(p.completionRate * 100)}%）`, 'success', 2500);
+      updateDashboard();
+    });
+
+    sdk.on('draftLoaded', (p) => {
+      logEvent('draftLoaded', { resumedFrom: `第${p.resumedFromIndex + 1}题`, answered: `${p.answeredCount}/${p.totalCount}`, status: p.status });
+      showToast(`📂 已从草稿恢复！回到第 ${p.resumedFromIndex + 1} 题（${p.answeredCount}/${p.totalCount} 已完成）`, 'info', 4500);
+      updateDashboard();
+    });
+
+    sdk.on('submit', (p) => {
+      logEvent('submit', { surveyId: p.payload.surveyId, answerCount: Object.keys(p.payload.answers).length });
+    });
+
+    sdk.on('submitSuccess', (p) => {
+      logEvent('submitSuccess', { subId: p.result.submissionId, completionRate: Math.round(p.summary.completionRate * 100) + '%' });
+      showToast('🎉 问卷提交成功！厚统计数据已生成', 'success', 4000);
+      renderSubmitResult(p.summary, p.result.submissionId);
+      updateDashboard();
+      console.log('%c📋 本次调研厚结果摘要（宿主系统可用）', 'color:#a78bfa; font-weight:bold; font-size:14px;', p.summary);
+    });
+
+    sdk.on('submitError', (p) => {
+      logEvent('submitError', p.error.message);
+      showToast(`提交失败：${p.error.message}`, 'error', 4000);
+    });
+
+    sdk.on('complete', (p) => {
+      logEvent('complete', { answers: Object.keys(p.answers).length, statCount: p.statistics.length });
+      console.log('%c📊 全部题目统计（QuestionStatistics[]）', 'color:#60a5fa; font-weight:bold;', p.statistics);
+    });
+
+    sdk.on('restart', (p) => {
+      logEvent('restart', { surveyId: p.surveyId });
+      document.getElementById('result-summary-panel').style.display = 'none';
+      updateDashboard();
+    });
+
+    // ======================== 挂载 ========================
+    sdk.mount('#survey-root');
+    updateDashboard();
+
+    console.log('%c✅ SurveySDK 已挂载成功！', 'color:#10b981; font-weight:bold; font-size:14px;');
+    console.log('💡 通过 window.__sdk 访问实例，常用方法：');
+    console.log('   window.__sdk.setDisplayMode("all")        → 切换整页模式');
+    console.log('   window.__sdk.toggleDisplayMode()          → 切换显示模式');
+    console.log('   window.__sdk.listInvalidQuestions()       → 列出必答未答题');
+    console.log('   window.__sdk.jumpAndHighlight("q_id")     → 跳转并高亮某题');
+    console.log('   window.__sdk.getOptionDistributions()     → 选项分布');
+    console.log('   window.__sdk.getRatingOverview()          → 评分概览（含 NPS）');
+    console.log('   window.__sdk.getTextSummaries()           → 文本汇总+关键词');
+    console.log('   window.__sdk.getRichResultSummary()       → 完整厚摘要');
+    console.log('   window.__sdk.getDraftStorageKey()         → 草稿存储 Key');
+    console.log('📦 构建：npm run build → 产出 dist/ 目录（UMD + ESM + d.ts）');
   </script>
 </body>
 </html>
