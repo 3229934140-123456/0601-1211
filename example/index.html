@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SurveySDK 满意度问卷演示</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 40px 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .page-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .page-title {
+      text-align: center;
+      color: #fff;
+      margin-bottom: 8px;
+      font-size: 28px;
+    }
+    .page-subtitle {
+      text-align: center;
+      color: rgba(255,255,255,0.85);
+      margin-bottom: 32px;
+      font-size: 14px;
+    }
+    #survey-root {
+      margin-bottom: 32px;
+    }
+    .event-log {
+      background: rgba(0,0,0,0.4);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 16px 20px;
+      color: #e0e7ff;
+      max-height: 240px;
+      overflow-y: auto;
+      font-size: 12px;
+      font-family: Consolas, Monaco, monospace;
+    }
+    .event-log-title {
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+    .log-item {
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      line-height: 1.6;
+    }
+    .log-item:last-child { border-bottom: none; }
+    .log-time { color: #a5b4fc; margin-right: 8px; }
+    .log-event { color: #fbbf24; font-weight: 600; }
+    .stats-bar {
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 16px 20px;
+      color: #fff;
+      margin-bottom: 24px;
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      font-size: 13px;
+    }
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+    }
+    .stat-label {
+      color: rgba(255,255,255,0.7);
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-size: 18px;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <h1 class="page-title">📊 SurveySDK 在线调研平台演示</h1>
+    <p class="page-subtitle">企业内部满意度问卷嵌入 SDK · 支持 4 种题型 · 跳题逻辑 · 进度保存 · 统计分析</p>
+
+    <div class="stats-bar" id="stats-bar">
+      <div class="stat-item">
+        <span class="stat-label">完成率</span>
+        <span class="stat-value" id="stat-completion">0%</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">已答题目</span>
+        <span class="stat-value" id="stat-answered">0/0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">当前状态</span>
+        <span class="stat-value" id="stat-status">未开始</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">平均得分</span>
+        <span class="stat-value" id="stat-score">-</span>
+      </div>
+    </div>
+
+    <div id="survey-root"></div>
+
+    <div class="event-log">
+      <div class="event-log-title">🔔 事件日志</div>
+      <div id="log-container"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { SurveySDK } from '../src/index.ts';
+    import { satisfactionSurvey } from './sampleSurvey.ts';
+
+    const logContainer = document.getElementById('log-container');
+    function log(eventName, payload) {
+      const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      item.innerHTML = `<span class="log-time">[${time}]</span><span class="log-event">${eventName}</span>: ${JSON.stringify(payload).slice(0, 150)}`;
+      logContainer.insertBefore(item, logContainer.firstChild);
+      if (logContainer.children.length > 30) {
+        logContainer.removeChild(logContainer.lastChild);
+      }
+    }
+
+    function updateStats(sdk) {
+      const rate = sdk.getCompletionRate();
+      document.getElementById('stat-completion').textContent = Math.round(rate.rate * 100) + '%';
+      document.getElementById('stat-answered').textContent = `${rate.answeredQuestions}/${rate.totalQuestions}`;
+      const statusMap = {
+        not_started: '未开始',
+        in_progress: '答题中',
+        draft_saved: '草稿已存',
+        submitted: '已提交',
+        error: '错误'
+      };
+      document.getElementById('stat-status').textContent = statusMap[sdk.getStatus()] || sdk.getStatus();
+      const scoreInfo = sdk.getAverageScore();
+      document.getElementById('stat-score').textContent = scoreInfo.count > 0 ? scoreInfo.average.toFixed(1) : '-';
+    }
+
+    const sdk = SurveySDK.create(satisfactionSurvey, {
+      autoSave: true,
+      autoSaveInterval: 10000,
+      enableLogging: true,
+      storageKeyPrefix: 'demo_survey',
+      renderConfig: {
+        showProgress: true,
+        showQuestionIndex: true,
+        buttonTexts: {
+          prev: '← 上一题',
+          next: '下一题 →',
+          submit: '🎉 提交问卷',
+          restart: '🔄 重新填写',
+          saveDraft: '💾 保存草稿'
+        }
+      }
+    });
+
+    sdk.setUser({
+      userId: 'EMP_2025_00847',
+      username: '张小明',
+      department: '产品部'
+    });
+
+    sdk.on('start', (p) => { log('start', p); updateStats(sdk); });
+    sdk.on('questionAnswer', (p) => { log('questionAnswer', { q: p.questionId, v: p.value }); updateStats(sdk); });
+    sdk.on('questionChange', (p) => { log('questionChange', `从第${p.fromIndex + 1}题 → 第${p.toIndex + 1}题`); updateStats(sdk); });
+    sdk.on('validateError', (p) => { log('validateError', { err: p.errorMessage }); });
+    sdk.on('draftSaved', (p) => { log('draftSaved', { status: p.progress.status }); updateStats(sdk); });
+    sdk.on('draftLoaded', (p) => { log('draftLoaded', { answered: Object.keys(p.progress.answers).length }); updateStats(sdk); });
+    sdk.on('submit', (p) => { log('submit', { surveyId: p.payload.surveyId, answers: Object.keys(p.payload.answers).length + '题' }); });
+    sdk.on('submitSuccess', (p) => { log('submitSuccess', { subId: p.result.submissionId }); updateStats(sdk); });
+    sdk.on('submitError', (p) => { log('submitError', p.error.message); });
+    sdk.on('complete', (p) => {
+      log('complete', { rate: Math.round(p.summary.completionRate * 100) + '%', avg: p.summary.averageScore?.toFixed(1) });
+      console.log('📋 完整结果摘要:', p.summary);
+      console.log('📊 题目统计:', sdk.getAllStatistics());
+      updateStats(sdk);
+    });
+    sdk.on('restart', (p) => { log('restart', p); updateStats(sdk); });
+
+    sdk.mount('#survey-root');
+    updateStats(sdk);
+
+    window.__sdk = sdk;
+    console.log('%c✅ SurveySDK 已挂载成功！可以通过 window.__sdk 访问 SDK 实例', 'color: #10b981; font-weight: bold;');
+    console.log('📖 可用方法示例:');
+    console.log('  window.__sdk.next()          → 下一题');
+    console.log('  window.__sdk.prev()          → 上一题');
+    console.log('  window.__sdk.submit()        → 提交问卷');
+    console.log('  window.__sdk.saveDraft()     → 保存草稿');
+    console.log('  window.__sdk.restart()       → 重新开始');
+    console.log('  window.__sdk.getResultSummary() → 获取结果摘要');
+  </script>
+</body>
+</html>
