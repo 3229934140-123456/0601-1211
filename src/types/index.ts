@@ -133,6 +133,7 @@ export interface RenderConfig {
   theme?: 'light' | 'dark' | 'auto';
   customClass?: string;
   displayMode?: DisplayMode;
+  successPageConfig?: Partial<SuccessPageConfig>;
 }
 
 export interface SDKConfig {
@@ -298,7 +299,8 @@ export type SurveyEventName =
   | 'submitError'
   | 'complete'
   | 'restart'
-  | 'displayModeChange';
+  | 'displayModeChange'
+  | 'close';
 
 export interface SurveyEventMap {
   start: { surveyId: string; user: UserContext | null };
@@ -340,6 +342,7 @@ export interface SurveyEventMap {
     from: DisplayMode;
     to: DisplayMode;
   };
+  close: Record<string, never>;
 }
 
 export interface RendererEventHandlers {
@@ -349,8 +352,90 @@ export interface RendererEventHandlers {
   onSubmit: () => void;
   onSaveDraft: () => void;
   onRestart: () => void;
+  onClose?: () => void;
+  onSetMode?: (mode: DisplayMode) => void;
   onToggleMode?: () => void;
   onJumpToQuestion?: (questionId: string) => void;
+}
+
+export interface ToolbarState {
+  surveyId: string;
+  status: SurveyStatus;
+  displayMode: DisplayMode;
+  currentQuestionIndex: number;
+  totalQuestions: number;
+  completionRate: number;
+  answeredCount: number;
+  requiredTotal: number;
+  requiredAnswered: number;
+  requiredUnansweredCount: number;
+  invalidQuestionIds: string[];
+  draftSavedAt?: number;
+}
+
+export type SuccessCardType =
+  | 'completion'
+  | 'score'
+  | 'rating'
+  | 'options'
+  | 'texts'
+  | 'keywords'
+  | 'duration'
+  | 'submissionId';
+
+export interface SuccessPageButtonConfig {
+  label: string;
+  type?: 'primary' | 'secondary' | 'ghost';
+  icon?: string;
+  action: 'restart' | 'close' | 'navigate' | 'custom';
+  navigateUrl?: string;
+  customHandler?: () => void;
+}
+
+export interface SuccessPageConfig {
+  showTitle?: boolean;
+  title?: string;
+  subtitle?: string;
+  icon?: string;
+  cards: SuccessCardType[];
+  buttons: SuccessPageButtonConfig[];
+  showRestartButton?: boolean;
+  showBackButton?: boolean;
+  backLabel?: string;
+  onBack?: () => void;
+}
+
+export interface ComparisonGroup {
+  id: string;
+  label: string;
+  summary: RichResultSummary;
+  meta?: Record<string, unknown>;
+}
+
+export interface ComparisonMetric {
+  key: string;
+  label: string;
+  values: { groupId: string; value: number | string | null; delta?: number }[];
+  winner?: string;
+}
+
+export interface SurveyComparisonResult {
+  groups: ComparisonGroup[];
+  completionRates: ComparisonMetric;
+  averageScores: ComparisonMetric;
+  weightedAverages: ComparisonMetric;
+  netPromoterScores?: ComparisonMetric;
+  requiredCompletionRates: ComparisonMetric;
+  durationSeconds?: ComparisonMetric;
+  optionDistributionMap: Record<string, ComparisonMetric>;
+  keywordsMap: Record<string, {
+    groupId: string;
+    keywords: string[];
+    common: string[];
+    unique: string[];
+  }[]>;
+  overallBestGroup?: string;
+  overallWorstGroup?: string;
 }
 
 export interface RenderContext {
@@ -369,6 +454,8 @@ export interface RenderContext {
   displayMode: DisplayMode;
   invalidQuestionIds?: string[];
   highlightQuestionId?: string;
+  submissionId?: string;
+  durationSeconds?: number;
 }
 
 export interface SurveyRenderer {

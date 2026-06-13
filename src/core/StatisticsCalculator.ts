@@ -17,6 +17,9 @@ import type {
   RatingOverview,
   RatingOverviewItem,
   QuestionOption,
+  ComparisonGroup,
+  ComparisonMetric,
+  SurveyComparisonResult,
 } from '../types';
 
 export class StatisticsCalculator {
@@ -479,6 +482,189 @@ export class StatisticsCalculator {
       invalidIds: [],
       userSnapshot: user as Parameters<typeof Object>[0] | undefined,
     };
+  }
+
+  static compareSummaries(
+    groups: ComparisonGroup[]
+  ): SurveyComparisonResult {
+    if (groups.length === 0) {
+      return {
+        groups: [],
+        completionRates: { key: 'completion', label: '完成率', values: [], winner: undefined },
+        averageScores: { key: 'avgScore', label: '平均分', values: [], winner: undefined },
+        weightedAverages: { key: 'weightedAvg', label: '加权平均', values: [], winner: undefined },
+        requiredCompletionRates: { key: 'requiredCompletion', label: '必填完成率', values: [], winner: undefined },
+        optionDistributionMap: {},
+        keywordsMap: {},
+      };
+    }
+
+    const first = groups[0].summary;
+
+    const completionValues = groups.map((g) => ({
+      groupId: g.id,
+      value: g.summary.completionRate,
+    }));
+    const bestCompletion = this.findBest(completionValues, 'high');
+
+    const avgValues = groups.map((g) => ({
+      groupId: g.id,
+      value: g.summary.averageScore ?? null,
+    }));
+    const bestAvg = this.findBest(avgValues, 'high');
+
+    const weightedValues = groups.map((g) => ({
+      groupId: g.id,
+      value: g.summary.ratingOverview.weightedAverage,
+    }));
+    const bestWeighted = this.findBest(weightedValues, 'high');
+
+    const requiredValues = groups.map((g) => {
+      const rate = g.summary.requiredTotal > 0
+        ? g.summary.requiredAnswered / g.summary.requiredTotal
+        : 0;
+      return { groupId: g.id, value: rate };
+    });
+    const bestRequired = this.findBest(requiredValues, 'high');
+
+    const durationValues = groups.map((g) => ({
+      groupId: g.id,
+      value: g.summary.durationSeconds ?? null,
+    }));
+
+    const npsValues = groups
+      .filter((g) => typeof g.summary.ratingOverview.netPromoterScore === 'number')
+      .map((g) => ({
+        groupId: g.id,
+        value: g.summary.ratingOverview.netPromoterScore!,
+      }));
+
+    const optionDistributionMap: Record<string, ComparisonMetric> = {};
+    const optionQuestions = first.optionDistributions;
+    for (const dist of optionQuestions) {
+      const qid = dist.questionId;
+      const allItems = dist.items.map((it) => it.value);
+      const values = groups.map((g) => {
+        const gDist = g.summary.optionDistributions.find((d) => d.questionId === qid);
+        if (!gDist) return { groupId: g.id, value: null };
+        const total = gDist.totalResponses;
+        const topItem = gDist.items.reduce(
+          (a, b) => (b.count > a.count ? b : a),
+          gDist.items[0]
+        );
+        return {
+          groupId: g.id,
+          value: total > 0 ? `${topItem?.label ?? 'N/A'} (${Math.round((topItem?.count ?? 0) / total * 100)}%)` : null,
+        };
+      });
+      optionDistributionMap[qid] = {
+        key: `opt_${qid}`,
+        label: dist.questionTitle,
+        values,
+      };
+    }
+
+    const keywordsMap: Record<string, { groupId: string; keywords: string[]; common: string[]; unique: string[] }[]> = {};
+    const textQuestions = first.textSummaries;
+    for (const ts of textQuestions) {
+      const qid = ts.questionId;
+      const groupKeywords = groups.map((g) => {
+        const gTs = g.summary.textSummaries.find((t) => t.questionId === qid);
+        return {
+          groupId: g.id,
+          keywords: gTs ? gTs.keywords : [],
+        };
+      });
+      const allKeywords = new Set<string>();
+      for (const gk of groupKeywords) {
+        for (const k of gk.keywords) allKeywords.add(k);
+      }
+      const commonKeywords = groupKeywords
+        .filter((gk) => gk.keywords.length > 0)
+        .reduce((common, gk) => {
+          return common.filter((k) => gk.keywords.includes(k));
+        }, Array.from(allKeywords));
+
+      const entries = groupKeywords.map((gk) => ({
+        groupId: gk.groupId,
+        keywords: gk.keywords,
+        common: commonKeywords.filter((k) => gk.keywords.includes(k)),
+        unique: gk.keywords.filter((k) => !commonKeywords.includes(k)),
+      }));
+      keywordsMap[qid] = entries;
+    }
+
+    let overallBest: string | undefined;
+    let overallWorst: string | undefined;
+    if (groups.length > 1) {
+      const scores = new Map<string, number>();
+      for (const g of groups) scores.set(g.id, 0);
+      if (bestCompletion) scores.set(bestCompletion, (scores.get(bestCompletion) || 0) + 1);
+      if (bestWeighted) scores.set(bestWeighted, (scores.get(bestWeighted) || 0) + 1);
+      if (bestRequired) scores.set(bestRequired, (scores.get(bestRequired) || 0) + 1);
+      const sorted = Array.from(scores.entries()).sort((a, b) => b[1] - a[1]);
+      overallBest = sorted[0][1] > 0 ? sorted[0][0] : undefined;
+      overallWorst = sorted[sorted.length - 1][1] < sorted[0][1] ? sorted[sorted.length - 1][0] : undefined;
+    }
+
+    return {
+      groups,
+      completionRates: {
+        key: 'completion',
+        label: '完成率',
+        values: completionValues,
+        winner: bestCompletion,
+      },
+      averageScores: {
+        key: 'avgScore',
+        label: '平均分',
+        values: avgValues,
+        winner: bestAvg,
+      },
+      weightedAverages: {
+        key: 'weightedAvg',
+        label: '加权平均',
+        values: weightedValues,
+        winner: bestWeighted,
+      },
+      netPromoterScores: npsValues.length > 0 ? {
+        key: 'nps',
+        label: 'NPS 净推荐值',
+        values: npsValues,
+        winner: this.findBest(npsValues, 'high'),
+      } : undefined,
+      requiredCompletionRates: {
+        key: 'requiredCompletion',
+        label: '必填完成率',
+        values: requiredValues,
+        winner: bestRequired,
+      },
+      durationSeconds: {
+        key: 'duration',
+        label: '答题时长（秒）',
+        values: durationValues,
+        winner: this.findBest(durationValues, 'low'),
+      },
+      optionDistributionMap,
+      keywordsMap,
+      overallBestGroup: overallBest,
+      overallWorstGroup: overallWorst,
+    };
+  }
+
+  private static findBest(
+    values: { groupId: string; value: number | string | null }[],
+    direction: 'high' | 'low'
+  ): string | undefined {
+    const numeric = values.filter(
+      (v): v is { groupId: string; value: number } => typeof v.value === 'number'
+    );
+    if (numeric.length === 0) return undefined;
+    if (direction === 'high') {
+      return numeric.reduce((a, b) => (b.value > a.value ? b : a)).groupId;
+    } else {
+      return numeric.reduce((a, b) => (b.value < a.value ? b : a)).groupId;
+    }
   }
 
   private static isAnswered(answer: Answer | undefined): boolean {

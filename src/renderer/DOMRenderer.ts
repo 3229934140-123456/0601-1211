@@ -10,6 +10,8 @@ import type {
   Answer,
   RenderConfig,
   DisplayMode,
+  SuccessCardType,
+  SuccessPageButtonConfig,
 } from '../types';
 import { StatisticsCalculator } from '../core/StatisticsCalculator';
 
@@ -971,34 +973,59 @@ export class DOMRenderer implements SurveyRenderer {
       ...context.buttonTexts,
     };
 
-    const cards: string[] = [];
-    cards.push(`
-      <div class="survey-sdk-summary-row">
-        <span class="survey-sdk-summary-label">总题数</span>
-        <span class="survey-sdk-summary-value">${summary.totalQuestions} 题</span>
-      </div>
-      <div class="survey-sdk-summary-row">
-        <span class="survey-sdk-summary-label">已答</span>
-        <span class="survey-sdk-summary-value">${summary.answeredQuestions} 题</span>
-      </div>
-      <div class="survey-sdk-summary-row">
-        <span class="survey-sdk-summary-label">必填完成</span>
-        <span class="survey-sdk-summary-value">${summary.requiredAnswered}/${summary.requiredTotal}</span>
-      </div>
-      <div class="survey-sdk-summary-row">
-        <span class="survey-sdk-summary-label">完成率</span>
-        <span class="survey-sdk-summary-value">${Math.round(summary.completionRate * 100)}%</span>
-      </div>
-    `);
+    const config = this.renderConfig?.successPageConfig || {};
+    const defaultCards: SuccessCardType[] = ['completion', 'score', 'options', 'duration', 'submissionId'];
+    const defaultButtons: SuccessPageButtonConfig[] = [
+      {
+        label: buttonTexts.restart || '重新开始',
+        type: 'primary',
+        action: 'restart',
+      },
+    ];
+    const defaultConfig = {
+      showTitle: true,
+      title: '问卷提交成功！',
+      subtitle: '感谢您的宝贵反馈，您的意见对我们非常重要。',
+      icon: '✓',
+      cards: defaultCards,
+      buttons: defaultButtons,
+      showRestartButton: true,
+    };
+    const merged = { ...defaultConfig, ...config };
+    if (config.cards) merged.cards = config.cards;
+    if (config.buttons) merged.buttons = config.buttons;
 
-    if (summary.averageScore !== undefined && summary.maxScore) {
+    const cardsHtml: string[] = [];
+
+    if (merged.cards.includes('completion')) {
+      cardsHtml.push(`
+        <div class="survey-sdk-summary-row">
+          <span class="survey-sdk-summary-label">总题数</span>
+          <span class="survey-sdk-summary-value">${summary.totalQuestions} 题</span>
+        </div>
+        <div class="survey-sdk-summary-row">
+          <span class="survey-sdk-summary-label">已答</span>
+          <span class="survey-sdk-summary-value">${summary.answeredQuestions} 题</span>
+        </div>
+        <div class="survey-sdk-summary-row">
+          <span class="survey-sdk-summary-label">必填完成</span>
+          <span class="survey-sdk-summary-value">${summary.requiredAnswered}/${summary.requiredTotal}</span>
+        </div>
+        <div class="survey-sdk-summary-row">
+          <span class="survey-sdk-summary-label">完成率</span>
+          <span class="survey-sdk-summary-value">${Math.round(summary.completionRate * 100)}%</span>
+        </div>
+      `);
+    }
+
+    if (merged.cards.includes('score') && summary.averageScore !== undefined && summary.maxScore) {
       const displayMax =
         summary.ratingOverview.totalRatingQuestions > 0
           ? Math.round(
               summary.maxScore / summary.ratingOverview.totalRatingQuestions
             )
           : summary.maxScore;
-      cards.push(`
+      cardsHtml.push(`
         <div class="survey-sdk-summary-row">
           <span class="survey-sdk-summary-label">平均得分</span>
           <span class="survey-sdk-summary-value">${summary.averageScore.toFixed(1)} 分</span>
@@ -1006,20 +1033,80 @@ export class DOMRenderer implements SurveyRenderer {
       `);
     }
 
-    cards.push(`
-      <div class="survey-sdk-summary-row">
-        <span class="survey-sdk-summary-label">题目分布</span>
-        <span class="survey-sdk-summary-value">
-          单选${summary.questionCountByType.single} · 多选${summary.questionCountByType.multiple} · 打分${summary.questionCountByType.rating} · 文本${summary.questionCountByType.text}
-        </span>
-      </div>
-    `);
+    if (merged.cards.includes('rating') && summary.ratingOverview.totalRatingQuestions > 0) {
+      cardsHtml.push(`
+        <div class="survey-sdk-summary-row">
+          <span class="survey-sdk-summary-label">打分题数</span>
+          <span class="survey-sdk-summary-value">${summary.ratingOverview.totalRatingQuestions}</span>
+        </div>
+        <div class="survey-sdk-summary-row">
+          <span class="survey-sdk-summary-label">加权平均</span>
+          <span class="survey-sdk-summary-value">${summary.ratingOverview.weightedAverage.toFixed(2)}</span>
+        </div>
+        ${
+          summary.ratingOverview.netPromoterScore !== undefined
+            ? `<div class="survey-sdk-summary-row">
+                 <span class="survey-sdk-summary-label">NPS</span>
+                 <span class="survey-sdk-summary-value">${summary.ratingOverview.netPromoterScore}</span>
+               </div>`
+            : ''
+        }
+      `);
+    }
 
-    if (summary.durationSeconds) {
-      cards.push(`
+    if (merged.cards.includes('options')) {
+      cardsHtml.push(`
+        <div class="survey-sdk-summary-row">
+          <span class="survey-sdk-summary-label">题目分布</span>
+          <span class="survey-sdk-summary-value">
+            单选${summary.questionCountByType.single} · 多选${summary.questionCountByType.multiple} · 打分${summary.questionCountByType.rating} · 文本${summary.questionCountByType.text}
+          </span>
+        </div>
+      `);
+    }
+
+    if (merged.cards.includes('texts')) {
+      cardsHtml.push(`
+        <div class="survey-sdk-summary-row">
+          <span class="survey-sdk-summary-label">文本题数</span>
+          <span class="survey-sdk-summary-value">${summary.textSummaries.length} 题</span>
+        </div>
+      `);
+    }
+
+    if (merged.cards.includes('keywords') && summary.textSummaries.length > 0) {
+      const allKeywords: string[] = [];
+      for (const t of summary.textSummaries) {
+        for (const k of t.keywords) allKeywords.push(k);
+      }
+      const topKeywords = allKeywords.slice(0, 6);
+      if (topKeywords.length > 0 && cardsHtml.length > 0) {
+        cardsHtml.push(`
+          <div class="survey-sdk-summary-row" style="grid-column: 1 / -1;">
+            <span class="survey-sdk-summary-label">关键词提取</span>
+            <span class="survey-sdk-summary-value" style="font-size:12px;">
+              ${topKeywords.map((k: string) => `<span style="display:inline-block;padding:2px 8px;margin:2px;background:rgba(99,102,241,0.15);border-radius:999px;">${this.escapeHtml(k)}</span>`).join('')}
+            </span>
+          </div>
+        `);
+      }
+    }
+
+    if (merged.cards.includes('duration') && summary.durationSeconds) {
+      cardsHtml.push(`
         <div class="survey-sdk-summary-row">
           <span class="survey-sdk-summary-label">答题时长</span>
           <span class="survey-sdk-summary-value">${summary.durationSeconds} 秒</span>
+        </div>
+      `);
+    }
+
+    if (merged.cards.includes('submissionId')) {
+      const subId = (context as { submissionId?: string }).submissionId;
+      cardsHtml.push(`
+        <div class="survey-sdk-summary-row" style="grid-column: 1 / -1;">
+          <span class="survey-sdk-summary-label">提交编号</span>
+          <span class="survey-sdk-summary-value" style="font-size:11px;word-break:break-all;">${this.escapeHtml(subId || '待生成')}</span>
         </div>
       `);
     }
@@ -1036,38 +1123,38 @@ export class DOMRenderer implements SurveyRenderer {
       );
     }
 
-    const ratingOverviewHtml =
-      summary.ratingOverview.totalRatingQuestions > 0
-        ? `
-      <div class="survey-sdk-summary-row">
-        <span class="survey-sdk-summary-label">打分题数量</span>
-        <span class="survey-sdk-summary-value">${summary.ratingOverview.totalRatingQuestions}</span>
-      </div>
-      <div class="survey-sdk-summary-row">
-        <span class="survey-sdk-summary-label">加权平均分</span>
-        <span class="survey-sdk-summary-value">${summary.ratingOverview.weightedAverage.toFixed(2)}</span>
-      </div>
-      ${
-        summary.ratingOverview.netPromoterScore !== undefined
-          ? `<div class="survey-sdk-summary-row">
-               <span class="survey-sdk-summary-label">NPS 净推荐值</span>
-               <span class="survey-sdk-summary-value">${summary.ratingOverview.netPromoterScore}</span>
-             </div>`
-          : ''
-      }`
-        : '';
+    const buttonsHtml = merged.buttons
+      .map((btn, idx) => {
+        const typeClass =
+          btn.type === 'primary'
+            ? 'survey-sdk-btn-primary'
+            : btn.type === 'secondary'
+              ? 'survey-sdk-btn-secondary'
+              : '';
+        const iconHtml = btn.icon ? `<span style="margin-right:6px;">${btn.icon}</span>` : '';
+        return `
+          <button type="button" class="survey-sdk-btn ${typeClass}" data-success-action="${btn.action}" data-btn-index="${idx}" ${btn.navigateUrl ? `data-navigate-url="${this.escapeAttr(btn.navigateUrl)}"` : ''}>
+            ${iconHtml}${this.escapeHtml(btn.label)}
+          </button>
+        `;
+      })
+      .join('');
+
+    const titleHtml = merged.showTitle
+      ? `
+        <div class="survey-sdk-success-icon">${this.escapeHtml(merged.icon || '✓')}</div>
+        <h2 class="survey-sdk-success-title">${this.escapeHtml(merged.title || '')}</h2>
+        ${merged.subtitle ? `<p class="survey-sdk-success-msg">${this.escapeHtml(merged.subtitle)}</p>` : ''}
+      `
+      : '';
 
     this.container.innerHTML = `
       <div class="survey-sdk-container">
         <div class="survey-sdk-success-page">
-          <div class="survey-sdk-success-icon">✓</div>
-          <h2 class="survey-sdk-success-title">问卷提交成功！</h2>
-          <p class="survey-sdk-success-msg">感谢您的宝贵反馈，您的意见对我们非常重要。提交ID已生成，可在业务系统查看详情。</p>
-
+          ${titleHtml}
           <div class="survey-sdk-summary-card">
             <div class="survey-sdk-summary-grid">
-              ${cards.join('')}
-              ${ratingOverviewHtml}
+              ${cardsHtml.join('')}
             </div>
             ${highlights.length > 0 ? `<div style="margin-top:12px;">${highlights.join('')}</div>` : ''}
             ${
@@ -1076,18 +1163,44 @@ export class DOMRenderer implements SurveyRenderer {
                 : ''
             }
           </div>
-
-          <button type="button" class="survey-sdk-btn survey-sdk-btn-primary" data-action="restart">
-            ${this.escapeHtml(buttonTexts.restart || '重新开始')}
-          </button>
+          <div class="survey-sdk-success-buttons" style="display:flex;gap: 0 8px;">
+            ${buttonsHtml}
+          </div>
         </div>
       </div>
     `;
 
-    const restartBtn = this.container.querySelector('[data-action="restart"]');
-    if (restartBtn) {
-      restartBtn.addEventListener('click', () => handlers.onRestart());
-    }
+    const successBtns = this.container.querySelectorAll('[data-success-action]');
+    successBtns.forEach((el) => {
+      el.addEventListener('click', () => {
+        const action = (el as HTMLElement).getAttribute('data-success-action');
+        const idx = parseInt((el as HTMLElement).getAttribute('data-btn-index') || '0', 10);
+        const navigateUrl = (el as HTMLElement).getAttribute('data-navigate-url');
+        const btnConfig = merged.buttons[idx];
+        if (!btnConfig) return;
+
+        switch (action) {
+          case 'restart':
+            handlers.onRestart();
+            break;
+          case 'close':
+            if (handlers.onClose) {
+              handlers.onClose();
+            }
+            break;
+          case 'navigate':
+            if (navigateUrl) {
+              window.location.href = navigateUrl;
+            }
+            break;
+          case 'custom':
+            if (btnConfig.customHandler && typeof btnConfig.customHandler === 'function') {
+              btnConfig.customHandler();
+            }
+            break;
+        }
+      });
+    });
   }
 
   private bindEvents(
@@ -1101,7 +1214,10 @@ export class DOMRenderer implements SurveyRenderer {
     modeBtns.forEach((el) => {
       el.addEventListener('click', () => {
         const mode = (el as HTMLElement).getAttribute('data-mode') as DisplayMode;
-        if (handlers.onToggleMode && mode) {
+        if (!mode) return;
+        if (handlers.onSetMode) {
+          handlers.onSetMode(mode);
+        } else if (handlers.onToggleMode) {
           handlers.onToggleMode();
         }
       });

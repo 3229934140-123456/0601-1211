@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SurveySDK · 构建产物演示（UMD版）</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px 20px;
+      background: linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%);
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: #ecfdf5;
+    }
+    .page-container {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    .page-header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .page-title {
+      font-size: 28px;
+      font-weight: 800;
+      margin: 0 0 6px 0;
+      color: #a7f3d0;
+    }
+    .page-subtitle {
+      font-size: 13px;
+      color: #6ee7b7;
+      margin: 0 0 12px 0;
+    }
+    .badge-row {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .env-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(16, 185, 129, 0.2);
+      color: #6ee7b7;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+    .env-badge.umd { background: rgba(245, 158, 11, 0.2); color: #fcd34d; border-color: rgba(245, 158, 11, 0.4); }
+    .env-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    .host-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 12px 16px;
+      background: rgba(6, 78, 59, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 12px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+    .toolbar-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #34d399;
+      margin-right: 4px;
+    }
+    .toolbar-stat {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 0 8px;
+      border-left: 1px solid rgba(16, 185, 129, 0.2);
+    }
+    .toolbar-stat:first-of-type { border-left: none; }
+    .toolbar-stat-label {
+      font-size: 10px;
+      color: #6ee7b7;
+      opacity: 0.8;
+    }
+    .toolbar-stat-value {
+      font-size: 14px;
+      font-weight: 700;
+      color: #ecfdf5;
+    }
+    .toolbar-actions {
+      display: flex;
+      gap: 6px;
+      margin-left: auto;
+      flex-wrap: wrap;
+    }
+    .toolbar-btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      background: rgba(16, 185, 129, 0.15);
+      color: #a7f3d0;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+    .toolbar-btn:hover {
+      background: rgba(16, 185, 129, 0.3);
+      color: #ecfdf5;
+    }
+    .toolbar-btn.active {
+      background: rgba(16, 185, 129, 0.5);
+      color: white;
+      border-color: #10b981;
+    }
+    .toolbar-btn.warn {
+      border-color: rgba(245, 158, 11, 0.4);
+      background: rgba(245, 158, 11, 0.15);
+      color: #fcd34d;
+    }
+    .toolbar-btn.warn:hover {
+      background: rgba(245, 158, 11, 0.3);
+    }
+    .toolbar-btn.primary {
+      background: linear-gradient(135deg, #10b981, #059669);
+      border-color: transparent;
+      color: white;
+    }
+    .toolbar-btn.primary:hover { filter: brightness(1.1); }
+
+    .survey-card {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+      color: #1f2937;
+    }
+
+    .event-log-card {
+      margin-top: 16px;
+      background: rgba(6, 78, 59, 0.6);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .event-log-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #6ee7b7;
+      margin: 0 0 10px 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .event-log {
+      max-height: 180px;
+      overflow-y: auto;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 11px;
+      line-height: 1.6;
+    }
+    .log-item {
+      padding: 6px 8px;
+      margin-bottom: 4px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 4px;
+      border-left: 3px solid #10b981;
+      color: #d1fae5;
+      word-break: break-all;
+    }
+    .log-time { color: #6ee7b7; opacity: 0.6; font-size: 10px; }
+    .log-event { color: #fde68a; font-weight: 700; }
+    .log-payload { color: #a7f3d0; }
+
+    .comparison-section {
+      margin-top: 20px;
+      background: rgba(6, 78, 59, 0.6);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: 12px;
+      padding: 16px;
+      display: none;
+    }
+    .comparison-section.visible { display: block; }
+    .comparison-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #6ee7b7;
+      margin: 0 0 12px 0;
+    }
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+    }
+    .comparison-card {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .comparison-card-label {
+      font-size: 11px;
+      color: #6ee7b7;
+      margin-bottom: 4px;
+    }
+    .comparison-card-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #ecfdf5;
+    }
+    .comparison-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .comparison-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .comparison-bar-label {
+      width: 80px;
+      font-size: 10px;
+      color: #a7f3d0;
+      flex-shrink: 0;
+    }
+    .comparison-bar-track {
+      flex: 1;
+      height: 16px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .comparison-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #10b981, #34d399);
+      border-radius: 4px;
+    }
+    .comparison-bar-fill.group-b { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+
+    .back-link {
+      text-align: center;
+      margin-top: 16px;
+    }
+    .back-link a {
+      color: #6ee7b7;
+      font-size: 12px;
+      text-decoration: none;
+    }
+    .back-link a:hover { text-decoration: underline; }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(16, 185, 129, 0.3); border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <div class="page-header">
+      <div class="badge-row">
+        <span class="env-badge umd"><span class="dot"></span> UMD 构建产物版</span>
+        <span class="env-badge"><span class="dot"></span> 老系统零构建接入 · 开箱即用</span>
+      </div>
+      <h1 class="page-title">📦 SurveySDK · 构建产物演示</h1>
+      <p class="page-subtitle">使用 dist/survey-sdk.umd.js · 无需打包工具 · 直接 script 标签引入</p>
+    </div>
+
+    <!-- 宿主外部工具条 -->
+    <div class="host-toolbar">
+      <span class="toolbar-title">🛠 宿主工具条</span>
+      <div class="toolbar-stat">
+        <span class="toolbar-stat-label">完成率</span>
+        <span class="toolbar-stat-value" id="tb-rate">0%</span>
+      </div>
+      <div class="toolbar-stat">
+        <span class="toolbar-stat-label">未答必填</span>
+        <span class="toolbar-stat-value" id="tb-required">-</span>
+      </div>
+      <div class="toolbar-stat">
+        <span class="toolbar-stat-label">当前模式</span>
+        <span class="toolbar-stat-value" id="tb-mode">一题一页</span>
+      </div>
+      <div class="toolbar-stat">
+        <span class="toolbar-stat-label">当前题</span>
+        <span class="toolbar-stat-value" id="tb-curr">-</span>
+      </div>
+      <div class="toolbar-actions">
+        <button class="toolbar-btn active" id="tb-mode-single" onclick="window.setMode('single')">📄 单页</button>
+        <button class="toolbar-btn" id="tb-mode-all" onclick="window.setMode('all')">📋 整页</button>
+        <button class="toolbar-btn" onclick="window.prevQuestion()">← 上一题</button>
+        <button class="toolbar-btn" onclick="window.nextQuestion()">下一题 →</button>
+        <button class="toolbar-btn warn" onclick="window.saveDraft()">💾 存草稿</button>
+        <button class="toolbar-btn primary" onclick="window.doSubmit()">🎉 提交</button>
+      </div>
+    </div>
+
+    <!-- SDK 渲染容器 -->
+    <div class="survey-card">
+      <div id="survey-root"></div>
+    </div>
+
+    <!-- 事件日志 -->
+    <div class="event-log-card">
+      <div class="event-log-title">🔔 事件日志</div>
+      <div class="event-log" id="event-log">
+        <div style="color:#6ee7b7; opacity:0.5; font-size:11px; padding:20px; text-align:center;">等待 SDK 初始化...</div>
+      </div>
+    </div>
+
+    <!-- 对比统计演示 -->
+    <div class="comparison-section" id="comparison-section">
+      <div class="comparison-title">📊 多提交对比统计演示（模拟3份提交结果）</div>
+      <div class="comparison-grid" id="comparison-metrics"></div>
+    </div>
+
+    <div class="back-link">
+      <a href="./index.html">← 返回源码调试版</a>
+    </div>
+  </div>
+
+  <!-- 引入 UMD 构建产物 -->
+  <script src="../dist/survey-sdk.umd.js"></script>
+
+  <script>
+    // 内联问卷数据（和 sampleSurvey.ts 一致）
+    const satisfactionSurvey = {
+      meta: {
+        id: 'satisfaction_umd_001',
+        title: '产品使用满意度调研（UMD演示）',
+        description: '本页面演示使用构建产物（UMD格式）直接接入，无需任何构建工具，老系统也能轻松嵌入。',
+        version: '1.0.0',
+        createdAt: '2025-01-15',
+        updatedAt: '2025-06-10',
+      },
+      questions: [
+        {
+          id: 'q_department',
+          type: 'single',
+          title: '您所在的部门是？',
+          required: true,
+          order: 1,
+          options: [
+            { id: 'dept_1', label: '研发部', value: 'rd' },
+            { id: 'dept_2', label: '产品部', value: 'pm' },
+            { id: 'dept_3', label: '设计部', value: 'design' },
+            { id: 'dept_4', label: '市场部', value: 'marketing' },
+            { id: 'dept_5', label: '销售部', value: 'sales' },
+            { id: 'dept_6', label: '运营部', value: 'ops' },
+            { id: 'dept_7', label: '其他', value: 'other' },
+          ],
+        },
+        {
+          id: 'q_usability',
+          type: 'rating',
+          title: '产品易用性评分',
+          description: '1分表示非常难用，5分表示非常好用',
+          required: true,
+          order: 2,
+          minValue: 1,
+          maxValue: 5,
+          step: 1,
+        },
+        {
+          id: 'q_features',
+          type: 'multiple',
+          title: '您最常用的功能有哪些？',
+          description: '可多选，最少选择1项，最多选择5项',
+          required: true,
+          order: 3,
+          minSelect: 1,
+          maxSelect: 5,
+          options: [
+            { id: 'feat_1', label: '数据分析与报表', value: 'analytics' },
+            { id: 'feat_2', label: '团队协作', value: 'collab' },
+            { id: 'feat_3', label: '文档管理', value: 'docs' },
+            { id: 'feat_4', label: '消息通知', value: 'notify' },
+            { id: 'feat_5', label: '权限管理', value: 'perms' },
+            { id: 'feat_6', label: 'API集成', value: 'api' },
+            { id: 'feat_7', label: '移动端支持', value: 'mobile' },
+          ],
+        },
+        {
+          id: 'q_performance',
+          type: 'rating',
+          title: '系统性能与稳定性评分',
+          required: true,
+          order: 4,
+          minValue: 1,
+          maxValue: 10,
+          step: 1,
+        },
+        {
+          id: 'q_overall',
+          type: 'rating',
+          title: '整体满意度评分',
+          required: true,
+          order: 5,
+          minValue: 0,
+          maxValue: 10,
+        },
+        {
+          id: 'q_comments',
+          type: 'text',
+          title: '其他建议或意见',
+          description: '如果您有任何其他想说的，请告诉我们',
+          required: false,
+          order: 6,
+          placeholder: '请输入您的宝贵建议...',
+          multiline: true,
+          maxLength: 1000,
+        },
+      ],
+    };
+
+    // 工具函数：格式化数字
+    function pct(v) { return Math.round(v * 100) + '%'; }
+
+    // 事件日志
+    let logCount = 0;
+    function logEvent(eventName, payload) {
+      const log = document.getElementById('event-log');
+      if (logCount === 0) log.innerHTML = '';
+      logCount++;
+      const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+      const item = document.createElement('div');
+      item.className = 'log-item';
+      let payloadStr = '';
+      try { payloadStr = JSON.stringify(payload).slice(0, 200); } catch(e) {}
+      item.innerHTML = `
+        <div class="log-time">${time}</div>
+        <div class="log-event">${eventName}</div>
+        <div class="log-payload">${payloadStr}</div>
+      `;
+      log.insertBefore(item, log.firstChild);
+      while (log.children.length > 30) log.removeChild(log.lastChild);
+    }
+
+    // 初始化 SDK
+    const SurveySDK = window.SurveySDK;
+    console.log('[UMD Demo] SurveySDK 已加载:', Object.keys(SurveySDK));
+
+    const sdk = SurveySDK.create(satisfactionSurvey, {
+      autoSave: true,
+      autoSaveInterval: 20000,
+      enableLogging: true,
+      storageKeyPrefix: 'umd_demo_survey',
+      startFromSavedProgress: true,
+      renderConfig: {
+        showProgress: true,
+        showQuestionIndex: true,
+        theme: 'light',
+        displayMode: 'single',
+        buttonTexts: {
+          prev: '← 上一题',
+          next: '下一题 →',
+          submit: '🎉 提交问卷',
+          restart: '🔄 重新填写',
+          saveDraft: '💾 保存草稿',
+        },
+        successPageConfig: {
+          showTitle: true,
+          title: '提交成功！',
+          subtitle: '感谢您的反馈，您的意见对我们非常重要。',
+          icon: '🎉',
+          cards: ['completion', 'score', 'rating', 'keywords', 'duration', 'submissionId'],
+          buttons: [
+            { label: '查看详情', type: 'secondary', action: 'navigate', navigateUrl: 'https://example.com/survey/result' },
+            { label: '再填一份', type: 'primary', action: 'restart' },
+          ],
+        },
+      },
+    });
+
+    sdk.setUser({
+      userId: 'UMD_USER_001',
+      username: '演示用户',
+      department: '市场部',
+    });
+
+    window.__sdk = sdk;
+
+    // 更新工具条
+    function updateToolbar() {
+      const state = sdk.getToolbarState();
+      document.getElementById('tb-rate').textContent = pct(state.completionRate);
+      document.getElementById('tb-required').textContent = state.requiredUnansweredCount + ' 道';
+      document.getElementById('tb-mode').textContent = state.displayMode === 'single' ? '一题一页' : '整页展开';
+      document.getElementById('tb-curr').textContent = `第 ${state.currentQuestionIndex + 1} 题`;
+
+      document.getElementById('tb-mode-single').classList.toggle('active', state.displayMode === 'single');
+      document.getElementById('tb-mode-all').classList.toggle('active', state.displayMode === 'all');
+    }
+
+    // 暴露到 window 供按钮调用
+    window.setMode = function(mode) {
+      sdk.setDisplayMode(mode);
+      updateToolbar();
+    };
+    window.prevQuestion = function() { sdk.prev(); updateToolbar(); };
+    window.nextQuestion = function() { sdk.next(); updateToolbar(); };
+    window.saveDraft = async function() {
+      const ok = await sdk.saveDraft();
+      alert(ok ? '草稿已保存！' : '草稿保存失败');
+    };
+    window.doSubmit = async function() {
+      try {
+        const result = await sdk.submit();
+        console.log('提交结果:', result);
+        alert('提交成功！submissionId: ' + result.submissionId);
+        showComparisonDemo();
+      } catch(e) {
+        console.warn('提交校验未通过:', e.message);
+      }
+    };
+
+    // 事件监听
+    sdk.on('start', (p) => { logEvent('start', { surveyId: p.surveyId }); updateToolbar(); });
+    sdk.on('questionAnswer', (p) => { logEvent('questionAnswer', { q: p.questionId }); updateToolbar(); });
+    sdk.on('questionChange', (p) => { logEvent('questionChange', `${p.fromIndex + 1}→${p.toIndex + 1}`); updateToolbar(); });
+    sdk.on('displayModeChange', (p) => { logEvent('displayModeChange', p); updateToolbar(); });
+    sdk.on('draftSaved', (p) => { logEvent('draftSaved', { answered: `${p.answeredCount}/${p.totalCount}`, rate: pct(p.completionRate), status: p.status }); updateToolbar(); });
+    sdk.on('draftLoaded', (p) => { logEvent('draftLoaded', { resumed: `第${p.resumedFromIndex + 1}题`, status: p.status }); updateToolbar(); });
+    sdk.on('submitSuccess', (p) => {
+      logEvent('submitSuccess', { subId: p.result.submissionId, rate: pct(p.summary.completionRate) });
+      updateToolbar();
+    });
+    sdk.on('validateError', (p) => { logEvent('validateError', { msg: p.errorMessage, ids: p.invalidQuestionIds }); });
+    sdk.on('close', () => { logEvent('close', {}); });
+
+    // 挂载
+    sdk.mount('#survey-root');
+    updateToolbar();
+
+    console.log('%c✅ SurveySDK (UMD版) 已挂载成功！', 'color:#10b981; font-weight:bold; font-size:14px;');
+    console.log('💡 window.__sdk 可直接访问实例');
+    console.log('💡 window.setMode("all") 切换整页模式');
+    console.log('💡 sdk.getToolbarState() 获取工具条状态');
+    console.log('💡 sdk.getRichResultSummary() 获取厚摘要');
+
+    // 对比统计演示
+    function showComparisonDemo() {
+      const section = document.getElementById('comparison-section');
+      section.classList.add('visible');
+
+      // 模拟3份提交结果（不同部门）
+      const currentSummary = sdk.getRichResultSummary();
+
+      // 构造假数据用于对比演示
+      const groupA = {
+        id: 'group_a',
+        label: '研发部（50人）',
+        summary: {
+          ...currentSummary,
+          completionRate: 0.92,
+          answeredQuestions: 6,
+          totalQuestions: 6,
+          requiredAnswered: 5,
+          requiredTotal: 5,
+          averageScore: 4.2,
+          ratingOverview: {
+            ...currentSummary.ratingOverview,
+            weightedAverage: 4.5,
+            totalRatingQuestions: 3,
+          },
+        },
+      };
+
+      const groupB = {
+        id: 'group_b',
+        label: '产品部（30人）',
+        summary: {
+          ...currentSummary,
+          completionRate: 0.85,
+          answeredQuestions: 5,
+          totalQuestions: 6,
+          requiredAnswered: 4,
+          requiredTotal: 5,
+          averageScore: 3.8,
+          ratingOverview: {
+            ...currentSummary.ratingOverview,
+            weightedAverage: 3.9,
+            totalRatingQuestions: 3,
+          },
+        },
+      };
+
+      const groupC = {
+        id: 'group_c',
+        label: '运营部（20人）',
+        summary: {
+          ...currentSummary,
+          completionRate: 0.78,
+          answeredQuestions: 4,
+          totalQuestions: 6,
+          requiredAnswered: 3,
+          requiredTotal: 5,
+          averageScore: 3.5,
+          ratingOverview: {
+            ...currentSummary.ratingOverview,
+            weightedAverage: 3.6,
+            totalRatingQuestions: 3,
+          },
+        },
+      };
+
+      try {
+        const comparison = SurveySDK.compareSummaries([groupA, groupB, groupC]);
+        renderComparison(comparison);
+      } catch(e) {
+        console.warn('对比统计演示出错:', e);
+      }
+    }
+
+    function renderComparison(c) {
+      const grid = document.getElementById('comparison-metrics');
+      const metrics = [
+        { key: 'completionRates', label: '完成率', format: (v) => pct(v) },
+        { key: 'weightedAverages', label: '加权平均分', format: (v) => v.toFixed(2) },
+        { key: 'requiredCompletionRates', label: '必填完成率', format: (v) => pct(v) },
+      ];
+
+      const groups = c.groups;
+      const maxVal = Math.max(...groups.map(g => g.summary.completionRate));
+
+      grid.innerHTML = metrics.map(m => {
+        const metric = c[m.key];
+        if (!metric) return '';
+        const maxV = Math.max(...metric.values.map(v => Number(v.value) || 0), 0.01);
+        return `
+          <div class="comparison-card">
+            <div class="comparison-card-label">${metric.label}</div>
+            <div class="comparison-bars">
+              ${metric.values.map((v, i) => `
+                <div class="comparison-bar-row">
+                  <div class="comparison-bar-label">${groups[i]?.label || v.groupId}</div>
+                  <div class="comparison-bar-track">
+                    <div class="comparison-bar-fill ${i === 1 ? 'group-b' : ''}" style="width: ${(Number(v.value) / maxV * 100)}%;"></div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+            ${metric.winner ? `<div style="font-size:10px; color:#fde68a; margin-top:4px;">🏆 最优: ${groups.find(g => g.id === metric.winner)?.label || metric.winner}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+
+      if (c.overallBestGroup) {
+        const bestLabel = groups.find(g => g.id === c.overallBestGroup)?.label || c.overallBestGroup;
+        grid.innerHTML += `
+          <div class="comparison-card" style="grid-column: 1 / -1; background: rgba(253, 224, 71, 0.1); border: 1px solid rgba(253, 224, 71, 0.3);">
+            <div class="comparison-card-label">综合评估</div>
+            <div class="comparison-card-value" style="color: #fde047;">🏆 综合最优：${bestLabel}</div>
+          </div>
+        `;
+      }
+    }
+  </script>
+</body>
+</html>

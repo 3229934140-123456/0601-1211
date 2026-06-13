@@ -23,6 +23,9 @@ import type {
   SurveyEventMap,
   RenderContext,
   DisplayMode,
+  ToolbarState,
+  ComparisonGroup,
+  SurveyComparisonResult,
 } from './types';
 
 import { EventEmitter } from './core/EventEmitter';
@@ -111,6 +114,12 @@ export class SurveySDK {
 
   static create(survey: Survey, config?: SDKConfig): SurveySDK {
     return new SurveySDK(survey, config);
+  }
+
+  static compareSummaries(
+    groups: ComparisonGroup[]
+  ): SurveyComparisonResult {
+    return StatisticsCalculator.compareSummaries(groups);
   }
 
   setSubmitAdapter(adapter: SubmitAdapterType): void {
@@ -366,17 +375,19 @@ export class SurveySDK {
     const meta = this.storage.saveAndReturnMeta(progress);
     if (meta.success) {
       this.engine.setStatus('draft_saved');
+      const updatedProgress = this.engine.getProgress();
+      const updatedRate = this.getCompletionRate();
       this.emit('draftSaved', {
-        progress,
+        progress: updatedProgress,
         storageKey: meta.key,
-        answeredCount: meta.answeredCount,
-        totalCount: meta.totalCount,
-        completionRate: meta.completionRate,
-        status: meta.status,
+        answeredCount: updatedRate.answeredQuestions,
+        totalCount: updatedRate.totalQuestions,
+        completionRate: updatedRate.rate,
+        status: 'draft_saved',
       });
       this.logger(
-        `草稿保存成功 | ${meta.answeredCount}/${meta.totalCount}题 | ${Math.round(
-          meta.completionRate * 100
+        `草稿保存成功 | ${updatedRate.answeredQuestions}/${updatedRate.totalQuestions}题 | ${Math.round(
+          updatedRate.rate * 100
         )}% | key=${meta.key}`
       );
     } else {
@@ -565,6 +576,26 @@ export class SurveySDK {
     return this.engine.getStatus();
   }
 
+  getToolbarState(): ToolbarState {
+    const rate = this.getCompletionRate();
+    const invalidIds = this.listInvalidQuestions();
+    const progress = this.engine.getProgress();
+    return {
+      surveyId: this.engine.getSurvey().meta.id,
+      status: this.engine.getStatus(),
+      displayMode: this.engine.getDisplayMode(),
+      currentQuestionIndex: this.engine.getCurrentIndex(),
+      totalQuestions: rate.totalQuestions,
+      completionRate: rate.rate,
+      answeredCount: rate.answeredQuestions,
+      requiredTotal: rate.requiredTotal,
+      requiredAnswered: rate.requiredAnswered,
+      requiredUnansweredCount: rate.requiredTotal - rate.requiredAnswered,
+      invalidQuestionIds: invalidIds,
+      draftSavedAt: progress.lastSavedAt,
+    };
+  }
+
   getCurrentQuestionIndex(): number {
     return this.engine.getCurrentIndex();
   }
@@ -734,6 +765,7 @@ export class SurveySDK {
     if (!this.renderer || !this.container) return;
 
     const completionRate = this.getCompletionRate();
+    const status = this.engine.getStatus();
     const context: RenderContext = {
       survey: this.engine.getSurvey(),
       questions: this.engine.getQuestions(),
@@ -746,13 +778,15 @@ export class SurveySDK {
       buttonTexts: this.renderConfig.buttonTexts,
       showProgress: this.renderConfig.showProgress,
       showQuestionIndex: this.renderConfig.showQuestionIndex,
-      status: this.engine.getStatus(),
+      status,
       displayMode: this.engine.getDisplayMode(),
       invalidQuestionIds:
         this.pendingInvalidQuestionIds.length > 0
           ? this.pendingInvalidQuestionIds
           : undefined,
       highlightQuestionId: this.pendingHighlightId || undefined,
+      submissionId: this.lastSubmittedResult?.submissionId,
+      durationSeconds: this.lastSubmittedResult?.summary?.durationSeconds,
     };
 
     this.renderer.render(context, {
@@ -762,9 +796,16 @@ export class SurveySDK {
       onSubmit: () => this.submit().catch(() => {}),
       onSaveDraft: () => this.saveDraft().catch(() => {}),
       onRestart: () => this.restart(),
+      onClose: () => this.handleClose(),
+      onSetMode: (mode: DisplayMode) => this.setDisplayMode(mode),
       onToggleMode: () => this.toggleDisplayMode(),
       onJumpToQuestion: (qid) => this.jumpAndHighlight(qid),
     });
+  }
+
+  private handleClose(): void {
+    this.emit('close', {});
+    this.logger('用户点击关闭按钮');
   }
 
   private showErrorToUser(message: string | undefined): void {
